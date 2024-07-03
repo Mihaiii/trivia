@@ -7,6 +7,16 @@ import logging
 from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Set, Deque, Dict
+from starlette.applications import Starlette
+from starlette.endpoints import WebSocketEndpoint
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
+from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocket, WebSocketDisconnect
+from fasthtml.common import *
+import uvicorn
+
 QUESTION_COUNTDOWN_SEC = 20
 KEEP_FAILED_TOPIC_SEC = 5
 MAX_TOPIC_LENGTH_CHARS = 30
@@ -55,7 +65,7 @@ class TaskManager:
 
     async def add_topic(self, topic: str, points: int, user: str):
         if len(topic) > MAX_TOPIC_LENGTH_CHARS:
-            return {"error": "Topic is longer than 30 characters"}
+            return {"error": f"Topic is longer than {MAX_TOPIC_LENGTH_CHARS} characters"}
         async with self.topics_lock:
             if self.user_points.get(user, 0) < points:
                 return {"error": "User does not have enough points"}
@@ -149,6 +159,7 @@ class TaskManager:
             await self.broadcast_current_topic()
             await self.broadcast_top_topics()
             logging.debug(f"Topic consumed: {topic.topic}")
+            logging.debug(f"Length of self.topics: {len(self.topics)}")
         return topic
 
     async def topic_timeout(self):
@@ -193,7 +204,7 @@ class TaskManager:
                 "points": self.current_topic.points,
                 "user": self.current_topic.user
             })
-            await asyncio.gather(*(client.send(message) for client in self.clients))
+            await asyncio.gather(*(client.send_text(message) for client in self.clients))
             logging.debug(f"Broadcasting current topic: {self.current_topic.topic}")
 
     async def broadcast_top_topics(self):
@@ -204,54 +215,63 @@ class TaskManager:
                 for t in top_topics
             ]
         })
-        await asyncio.gather(*(client.send(message) for client in self.clients))
+        await asyncio.gather(*(client.send_text(message) for client in self.clients))
         logging.debug("Broadcasting top topics")
 
-async def consumer_handler(websocket, task_manager):
-    user_id = websocket.remote_address[0]  # Simplified user identification
-    task_manager.clients.add(websocket)
-    task_manager.users[user_id] = False
-    if user_id not in task_manager.user_points:
-        task_manager.user_points[user_id] = 100  # Initialize user with 100 points
-    logging.info(f"Client connected: {user_id}")
-    try:
-        async for message in websocket:
-            data = json.loads(message)
-            topic = data.get('topic')
-            points = data.get('points', 0)
-            if topic:
-                response = await task_manager.add_topic(topic, points, user_id)
-                await websocket.send(json.dumps(response))
-            elif data.get('action') == 'consume':
-                consumed_topic = await task_manager.consume_successful_topic()
-                if consumed_topic:
-                    await websocket.send(json.dumps({
-                        "consumed_topic": consumed_topic.topic,
-                        "points": consumed_topic.points,
-                        "user": consumed_topic.user
-                    }))
-                else:
-                    await websocket.send(json.dumps({
-                        "message": "No successful topic to consume"
-                    }))
-            elif data.get('action') == 'choose':
-                await task_manager.user_choice(user_id)
-    finally:
-        task_manager.clients.remove(websocket)
-        logging.info(f"Client disconnected: {user_id}")
+class WebSocketManager(WebSocketEndpoint):
+    encoding = "json"
+    async def on_connect(self, websocket: WebSocket):
+        await websocket.accept()
+        task_manager = self.scope['app'].state.task_manager
+        user_id = f"user_{random.randint(1000, 9999)}"  # Simulated user identification
+        task_manager.clients.add(websocket)
+        task_manager.users[user_id] = False
+        if user_id not in task_manager.user_points:
+            task_manager.user_points[user_id] = 20  # Initialize user with 20 points
+        logging.info(f"Client connected: {user_id}")
+        self.scope['user_id'] = user_id
+        self.scope['task_manager'] = task_manager
 
-async def server(task_manager):
-    async with websockets.serve(lambda ws, path: consumer_handler(ws, task_manager), "localhost", 8765):
-        await asyncio.Future()  # run forever
+    async def on_receive(self, websocket: WebSocket, data):
+        user_id = self.scope['user_id']
+        topic = data.get('topic')
+        points = data.get('points', 0)
+        if topic:
+            response = await self.scope['task_manager'].add_topic(topic, points, user_id)
+            await websocket.send_json(response)
+        elif data.get('action') == 'consume':
+            consumed_topic = await self.scope['task_manager'].consume_successful_topic()
+            if consumed_topic:
+                await websocket.send_json({
+                    "consumed_topic": consumed_topic.topic,
+                    "points": consumed_topic.points,
+                    "user": consumed_topic.user
+                })
+            else:
+                await websocket.send_json({"message": "No successful topic to consume"})
+        elif data.get('action') == 'choose':
+            await self.scope['task_manager'].user_choice(user_id)
 
-async def main():
+    async def on_disconnect(self, websocket: WebSocket, close_code: int):
+        self.scope['task_manager'].clients.remove(websocket)
+        logging.info(f"Client disconnected: {self.scope['user_id']}")
+
+async def app_startup():
     num_executors = 2  # Change this to run more executors
     task_manager = TaskManager(num_executors)
+    app.state.task_manager = task_manager
     #todo: uncomments
     #asyncio.create_task(task_manager.monitor_topics())
     for i in range(num_executors):
         asyncio.create_task(task_manager.run_executor(i))
-    await server(task_manager)
+
+middleware = [
+    Middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+]
+routes = [
+    WebSocketRoute("/ws", WebSocketManager)
+]
+app = Starlette(debug=True, routes=routes, middleware=middleware, on_startup=[app_startup])
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvicorn.run(app, host="localhost", port=8000)
