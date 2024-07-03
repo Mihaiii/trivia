@@ -10,8 +10,8 @@ from typing import List, Set, Deque, Dict
 QUESTION_COUNTDOWN_SEC = 20
 KEEP_FAILED_TOPIC_SEC = 5
 MAX_TOPIC_LENGTH_CHARS = 30
-MAX_NR_TOPICS_ALLOW_MORE = 10
-NR_TOPICS_TO_BREADCAST = 5
+MAX_NR_TOPICS_FOR_ALLOW_MORE = 10
+NR_TOPICS_TO_BROADCAST = 5
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -46,7 +46,7 @@ class TaskManager:
 
     async def add_default_topics(self):
         async with self.topics_lock:
-            if len(self.topics) < MAX_NR_TOPICS_ALLOW_MORE:
+            if len(self.topics) < MAX_NR_TOPICS_FOR_ALLOW_MORE:
                 for i in range(10):
                     self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
                 self.topics = deque(sorted(self.topics, reverse=True))
@@ -170,7 +170,7 @@ class TaskManager:
             logging.debug("check_topic_completion after self.topics_lock")
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if self.current_topic and (current_time - self.current_topic_start_time >= 20 or all_users_chosen):
+            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC or all_users_chosen):
                 logging.debug(f"Completing topic: {self.current_topic.topic}")
                 should_consume = True
         
@@ -197,7 +197,7 @@ class TaskManager:
             logging.debug(f"Broadcasting current topic: {self.current_topic.topic}")
 
     async def broadcast_top_topics(self):
-        top_topics = list(self.topics)[:NR_TOPICS_TO_BREADCAST]
+        top_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
         message = json.dumps({
             "top_topics": [
                 {"topic": t.topic, "points": t.points, "status": t.status, "user": t.user}
