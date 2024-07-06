@@ -8,6 +8,7 @@ import json
 import logging
 import random
 import threading
+from typing import List
 
 QUESTION_COUNTDOWN_SEC = 3
 KEEP_FAILED_TOPIC_SEC = 5
@@ -22,8 +23,8 @@ css = [
     Style('.container { display: flex; flex-direction: column; height: 100vh; }'),
     Style('.main { display: flex; flex: 1; flex-direction: row; }'),
     Style('.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; }'),
-    Style('.left-panel { display: flex; flex-direction: column; width: 30%; padding: 10px; border-right: 1px solid #ddd; }'),
-    Style('.right-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
+    Style('.side-panel { display: flex; flex-direction: column; width: 30%; padding: 10px; border-right: 1px solid #ddd; }'),
+    Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
     Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }')
 ]
 
@@ -33,7 +34,8 @@ class Topic:
     topic: str = field(compare=False)
     status: str = field(default="pending", compare=False)
     user: str = field(default="[bot]", compare=False)
-    
+    winners: List[str] = field(default_factory=list, compare=False)
+
     def __hash__(self):
         return hash((self.points, self.topic, self.user))
 
@@ -46,6 +48,7 @@ class TaskManager:
     def __init__(self, num_executors: int):
         self.topics = deque()
         self.topics_lock = asyncio.Lock()
+        self.past_topics = deque(maxlen=5)
         self.users_lock = asyncio.Lock()
         self.executors = [concurrent.futures.ThreadPoolExecutor(max_workers=1) for _ in range(num_executors)]
         self.executor_tasks = [set() for _ in range(num_executors)]
@@ -83,7 +86,7 @@ class TaskManager:
             elif topic.status == "computing":
                 topic.status = random.choice(["successful"]) #TODO: ["successful", "failed"]
             
-            await self.broadcast_top_topics()
+            await self.broadcast_next_topics()
 
             if topic.status == "successful" and self.current_topic is None:
                 should_consume = True
@@ -107,6 +110,7 @@ class TaskManager:
                 topic = successful_topics[0]  # Get the highest points successful topic
                 logging.debug(f"Topic obtained: {topic.topic}")
                 self.topics.remove(topic)
+                self.past_topics.append(topic)
                 self.current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 async with self.users_lock:
@@ -117,7 +121,8 @@ class TaskManager:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
             #TODO:add broadcast current topic
             #await self.broadcast_current_topic()
-            await self.broadcast_top_topics()
+            await self.broadcast_next_topics()
+            await self.broadcast_past_topics()
             logging.debug(f"Topic consumed: {topic.topic}")
             logging.debug(f"Length of self.topics: {len(self.topics)}")
         return topic
@@ -153,7 +158,7 @@ class TaskManager:
         async with self.topics_lock:
             if topic in self.topics and topic.status == "failed":
                 self.topics.remove(topic)
-                await self.broadcast_top_topics()
+                await self.broadcast_next_topics()
         logging.debug(f"Failed topic removed: {topic.topic}")
 
     async def monitor_topics(self):
@@ -174,24 +179,38 @@ class TaskManager:
                 for i in range(6):
                     self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
                 self.topics = deque(sorted(self.topics, reverse=True))
-                await self.broadcast_top_topics()
+                await self.broadcast_next_topics()
         logging.debug("Default topics added")
 
-    async def broadcast_top_topics(self, client = None):
-        top_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
-        cards = [Div(f"{item.topic} - {item.user} - {item.status} - {item.points} points", cls="card") for item in top_topics]
-
+    async def broadcast_next_topics(self, client = None):
+        next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
+        next_topics_html = [Div(f"{item.topic} - {item.user} - {item.status} - {item.points} points", cls="card") for item in next_topics]
         with self.clients_lock:
             print("self.clients len")
             print(len(self.clients))
             clients = self.clients if client is None else [client]
             for client in clients.copy():
                 try:
-                    await client(Div(*cards, id="next_topics"))
+                    await client(Div(*next_topics_html, id="next_topics"))
                 except:
                     self.clients.remove(client)
                     logging.debug(f"Removed disconnected client: {client}")
         logging.debug("Broadcasting top topics")
+
+    async def broadcast_past_topics(self, client = None):
+        print(self.past_topics)
+        past_topics = list(self.past_topics)[::-1]
+        print(past_topics)
+        past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in past_topics]
+        with self.clients_lock:
+            clients = self.clients if client is None else [client]
+            for client in clients.copy():
+                try:
+                    await client(Div(*past_topics_html, id="past_topics"))
+                except:
+                    self.clients.remove(client)
+                    logging.debug(f"Removed disconnected client: {client}")
+            logging.debug("Broadcasting pst topics")
 
 async def app_startup():
     num_executors = 2  # Change this to run more executors
@@ -232,18 +251,24 @@ async def get(request):
             Button("BID", cls="primary"),
             cls="text-area"
         ),
-        cls="left-panel"
+        cls="side-panel"
     )
     
-    right_panel = Div(
+    middle_panel = Div(
         countdown,
         current_topic,
         options,
-        cls="right-panel"
+        cls="side-panel"
+    )
+
+    right_panel = Div(
+        Button("Login / nr of points", cls="primary"),
+        Div(id="past_topics"),
     )
     
     main_content = Div(
         left_panel,
+        middle_panel,
         right_panel,
         cls="main"
     )
@@ -268,7 +293,8 @@ async def on_connect(send, ws):
     logging.info(f"Client connected: {user_id}")
     ws.scope['user_id'] = user_id
     ws.scope['task_manager'] = task_manager
-    await task_manager.broadcast_top_topics(send)
+    await task_manager.broadcast_next_topics(send)
+    await task_manager.broadcast_past_topics(send)
 
 async def on_disconnect(send, ws):
     print("Calling on_disconnect")
