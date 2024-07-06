@@ -119,10 +119,9 @@ class TaskManager:
                     self.past_topics.append(topic)
                 self.current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
+                self.current_timeout_task = asyncio.create_task(self.topic_timeout())
                 async with self.users_lock:
                     self.users = {user: False for user in self.users.keys()}  # Reset user choices
-                logging.debug("Start timeout")
-                self.current_timeout_task = asyncio.create_task(self.topic_timeout())
                 
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
@@ -145,12 +144,12 @@ class TaskManager:
 
     async def check_topic_completion(self):
         should_consume = False
-        current_time = asyncio.get_event_loop().time()
         async with self.users_lock:
             all_users_chosen = all(self.users.values())
         logging.debug("check_topic_completion before self.topics_lock")
         async with self.topics_lock:
             logging.debug("check_topic_completion after self.topics_lock")
+            current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
             if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
@@ -259,7 +258,6 @@ async def get(request):
         ),
         cls="side-panel"
     )
-    
     middle_panel = Div(
         countdown,
         current_topic,
