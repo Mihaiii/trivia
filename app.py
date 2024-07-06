@@ -10,11 +10,15 @@ import random
 import threading
 from typing import List
 
+
+logging.basicConfig(level=logging.DEBUG)
+
 QUESTION_COUNTDOWN_SEC = 3
 KEEP_FAILED_TOPIC_SEC = 5
 MAX_TOPIC_LENGTH_CHARS = 30
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6
 NR_TOPICS_TO_BROADCAST = 5
+BID_MIN_POINTS = 3
 
 css = [
     picolink,
@@ -23,7 +27,7 @@ css = [
     Style('.container { display: flex; flex-direction: column; height: 100vh; }'),
     Style('.main { display: flex; flex: 1; flex-direction: row; }'),
     Style('.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; }'),
-    Style('.side-panel { display: flex; flex-direction: column; width: 30%; padding: 10px; border-right: 1px solid #ddd; }'),
+    Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; }'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
     Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }')
 ]
@@ -49,6 +53,7 @@ class TaskManager:
         self.topics = deque()
         self.topics_lock = asyncio.Lock()
         self.past_topics = deque(maxlen=5)
+        self.past_topics_lock = asyncio.Lock()
         self.users_lock = asyncio.Lock()
         self.executors = [concurrent.futures.ThreadPoolExecutor(max_workers=1) for _ in range(num_executors)]
         self.executor_tasks = [set() for _ in range(num_executors)]
@@ -94,7 +99,7 @@ class TaskManager:
             if topic.status == "failed":
                 await asyncio.create_task(self.remove_failed_topic(topic))
             
-            logging.debug(f"Topic updated: {topic.topic} to {topic.status}")
+            #logging.debug(f"Topic updated: {topic.topic} to {topic.status}")
         
         if should_consume:
             await self.consume_successful_topic()
@@ -105,17 +110,19 @@ class TaskManager:
         async with self.topics_lock:
             logging.debug(f"consume_successful_topic after lock")
             successful_topics = [t for t in self.topics if t.status == "successful"]
-            logging.debug(successful_topics)
+            #logging.debug(successful_topics)
             if successful_topics:
                 topic = successful_topics[0]  # Get the highest points successful topic
                 logging.debug(f"Topic obtained: {topic.topic}")
                 self.topics.remove(topic)
-                self.past_topics.append(topic)
+                async with self.past_topics_lock:
+                    self.past_topics.append(topic)
                 self.current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 async with self.users_lock:
                     self.users = {user: False for user in self.users.keys()}  # Reset user choices
-                self.current_timeout_task = asyncio.create_task(self.topic_timeout())  # Start the 20-second timeout
+                logging.debug("Start timeout")
+                self.current_timeout_task = asyncio.create_task(self.topic_timeout())
                 
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
@@ -129,9 +136,9 @@ class TaskManager:
 
     async def topic_timeout(self):
         try:
-            await asyncio.sleep(QUESTION_COUNTDOWN_SEC)  # Wait for 20 seconds
-            await self.check_topic_completion()  # Check if the topic should be completed
+            await asyncio.sleep(QUESTION_COUNTDOWN_SEC)
             logging.debug(f"{QUESTION_COUNTDOWN_SEC} seconds timeout completed")
+            await self.check_topic_completion()  # Check if the topic should be completed
         except asyncio.CancelledError:
             logging.debug("Timeout task cancelled")
             pass  # Handle cancellation if the task is cancelled
@@ -146,7 +153,7 @@ class TaskManager:
             logging.debug("check_topic_completion after self.topics_lock")
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC or all_users_chosen):
+            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
                 logging.debug(f"Completing topic: {self.current_topic.topic}")
                 should_consume = True
         
@@ -180,7 +187,7 @@ class TaskManager:
                     self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
                 self.topics = deque(sorted(self.topics, reverse=True))
                 await self.broadcast_next_topics()
-        logging.debug("Default topics added")
+                logging.debug("Default topics added")
 
     async def broadcast_next_topics(self, client = None):
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
@@ -195,12 +202,11 @@ class TaskManager:
                 except:
                     self.clients.remove(client)
                     logging.debug(f"Removed disconnected client: {client}")
-        logging.debug("Broadcasting top topics")
+        #logging.debug("Broadcasting top topics")
 
     async def broadcast_past_topics(self, client = None):
-        print(self.past_topics)
-        past_topics = list(self.past_topics)[::-1]
-        print(past_topics)
+        async with self.past_topics_lock:
+            past_topics = list(self.past_topics)[::-1]
         past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in past_topics]
         with self.clients_lock:
             clients = self.clients if client is None else [client]
@@ -210,7 +216,7 @@ class TaskManager:
                 except:
                     self.clients.remove(client)
                     logging.debug(f"Removed disconnected client: {client}")
-            logging.debug("Broadcasting pst topics")
+            #logging.debug("Broadcasting past topics")
 
 async def app_startup():
     num_executors = 2  # Change this to run more executors
@@ -247,7 +253,7 @@ async def get(request):
         Div(id="next_topics"),
         Div(
             Textarea(placeholder="TEXT AREA FOR WRITING THE TOPIC"),
-            Input(type="number", placeholder="NR POINTS"),
+            Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS),
             Button("BID", cls="primary"),
             cls="text-area"
         ),
@@ -258,12 +264,13 @@ async def get(request):
         countdown,
         current_topic,
         options,
-        cls="side-panel"
+        cls="middle-panel"
     )
 
     right_panel = Div(
         Button("Login / nr of points", cls="primary"),
         Div(id="past_topics"),
+        cls="side-panel"
     )
     
     main_content = Div(
