@@ -1,29 +1,31 @@
+from fasthtml.common import *
+from fasthtml.xtend import picolink
 import asyncio
-import concurrent.futures
-import random
-import websockets
-import json
-import logging
 from collections import deque
 from dataclasses import dataclass, field
-from typing import List, Set, Deque, Dict
-from starlette.applications import Starlette
-from starlette.endpoints import WebSocketEndpoint
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse
-from starlette.routing import Route, WebSocketRoute
-from starlette.websockets import WebSocket, WebSocketDisconnect
-from fasthtml.common import *
-import uvicorn
+import concurrent.futures
+import json
+import logging
+import random
+import threading
 
-QUESTION_COUNTDOWN_SEC = 20
+QUESTION_COUNTDOWN_SEC = 3
 KEEP_FAILED_TOPIC_SEC = 5
 MAX_TOPIC_LENGTH_CHARS = 30
-MAX_NR_TOPICS_FOR_ALLOW_MORE = 10
+MAX_NR_TOPICS_FOR_ALLOW_MORE = 6
 NR_TOPICS_TO_BROADCAST = 5
 
-logging.basicConfig(level=logging.DEBUG)
+css = [
+    picolink,
+    Style('* { box-sizing: border-box; margin: 0; padding: 0; }'),
+    Style('body { font-family: Arial, sans-serif; }'),
+    Style('.container { display: flex; flex-direction: column; height: 100vh; }'),
+    Style('.main { display: flex; flex: 1; flex-direction: row; }'),
+    Style('.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; }'),
+    Style('.left-panel { display: flex; flex-direction: column; width: 30%; padding: 10px; border-right: 1px solid #ddd; }'),
+    Style('.right-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
+    Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }')
+]
 
 @dataclass(order=True)
 class Topic:
@@ -53,29 +55,25 @@ class TaskManager:
         self.user_points = {}  # Track user points
         self.current_timeout_task = None
         self.clients = set()  # Track connected WebSocket clients
+        self.clients_lock = threading.Lock()
 
-    async def add_default_topics(self):
-        async with self.topics_lock:
-            if len(self.topics) < MAX_NR_TOPICS_FOR_ALLOW_MORE:
-                for i in range(10):
-                    self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
-                self.topics = deque(sorted(self.topics, reverse=True))
-                await self.broadcast_top_topics()
-        logging.debug("Default topics added")
+    async def run_executor(self, executor_id: int):
+        while True:
+            topic_to_process = None
+            async with self.topics_lock:
+                for topic in self.topics:
+                    if all(topic not in tasks for tasks in self.executor_tasks):
+                        if topic.status not in ["successful", "failed"]:
+                            self.executor_tasks[executor_id].add(topic)
+                            topic_to_process = topic
+                            break
 
-    async def add_topic(self, topic: str, points: int, user: str):
-        if len(topic) > MAX_TOPIC_LENGTH_CHARS:
-            return {"error": f"Topic is longer than {MAX_TOPIC_LENGTH_CHARS} characters"}
-        async with self.topics_lock:
-            if self.user_points.get(user, 0) < points:
-                return {"error": "User does not have enough points"}
-            self.user_points[user] -= points
-            self.topics.append(Topic(points, topic, user=user))
-            self.topics = deque(sorted(self.topics, reverse=True))
-            await self.broadcast_top_topics()
-            logging.debug(f"Topic added: {topic} by {user}")
-            return {"success": "Topic added"}
-
+            if topic_to_process:
+                await self.update_status(topic_to_process)
+                async with self.topics_lock:
+                    self.executor_tasks[executor_id].remove(topic_to_process)
+            await asyncio.sleep(0.1)  # Avoid busy-waiting
+    
     async def update_status(self, topic: Topic):
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
@@ -98,43 +96,6 @@ class TaskManager:
         if should_consume:
             await self.consume_successful_topic()
 
-    async def remove_failed_topic(self, topic: Topic):
-        await asyncio.sleep(KEEP_FAILED_TOPIC_SEC)
-        async with self.topics_lock:
-            if topic in self.topics and topic.status == "failed":
-                self.topics.remove(topic)
-                await self.broadcast_top_topics()
-        logging.debug(f"Failed topic removed: {topic.topic}")
-
-    async def run_executor(self, executor_id: int):
-        while True:
-            topic_to_process = None
-            async with self.topics_lock:
-                for topic in self.topics:
-                    if all(topic not in tasks for tasks in self.executor_tasks):
-                        if topic.status not in ["successful", "failed"]:
-                            self.executor_tasks[executor_id].add(topic)
-                            topic_to_process = topic
-                            break
-
-            if topic_to_process:
-                await self.update_status(topic_to_process)
-                async with self.topics_lock:
-                    self.executor_tasks[executor_id].remove(topic_to_process)
-            await asyncio.sleep(0.1)  # Avoid busy-waiting
-
-    async def monitor_topics(self):
-        while True:
-            need_default_topics = False
-            async with self.topics_lock:
-                if all(topic.status in ["successful", "failed"] for topic in self.topics):
-                    need_default_topics = True
-
-            if need_default_topics:
-                await self.add_default_topics()
-            
-            await asyncio.sleep(1)  # Check periodically
-
     async def consume_successful_topic(self):
         topic = None
         logging.debug(f"consume_successful_topic before lock")
@@ -150,13 +111,12 @@ class TaskManager:
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 async with self.users_lock:
                     self.users = {user: False for user in self.users.keys()}  # Reset user choices
-                #if self.current_timeout_task:
-                #    self.current_timeout_task.cancel()  # Cancel any existing timeout task
                 self.current_timeout_task = asyncio.create_task(self.topic_timeout())  # Start the 20-second timeout
                 
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
-            await self.broadcast_current_topic()
+            #TODO:add broadcast current topic
+            #await self.broadcast_current_topic()
             await self.broadcast_top_topics()
             logging.debug(f"Topic consumed: {topic.topic}")
             logging.debug(f"Length of self.topics: {len(self.topics)}")
@@ -188,90 +148,142 @@ class TaskManager:
         if should_consume:
             await self.consume_successful_topic()
 
-    async def user_choice(self, user: str):
-        async with self.users_lock:
-            self.users[user] = True
-            logging.debug(f"User {user} made a choice")
-            if all(self.users.values()):
-                #if self.current_timeout_task:
-                #    self.current_timeout_task.cancel()  # Cancel the timeout task if all users have chosen
-                await self.check_topic_completion()  # Immediately check if all users have chosen
+    async def remove_failed_topic(self, topic: Topic):
+        await asyncio.sleep(KEEP_FAILED_TOPIC_SEC)
+        async with self.topics_lock:
+            if topic in self.topics and topic.status == "failed":
+                self.topics.remove(topic)
+                await self.broadcast_top_topics()
+        logging.debug(f"Failed topic removed: {topic.topic}")
 
-    async def broadcast_current_topic(self):
-        if self.current_topic:
-            message = json.dumps({
-                "current_topic": self.current_topic.topic,
-                "points": self.current_topic.points,
-                "user": self.current_topic.user
-            })
-            await asyncio.gather(*(client.send_text(message) for client in self.clients))
-            logging.debug(f"Broadcasting current topic: {self.current_topic.topic}")
+    async def monitor_topics(self):
+        while True:
+            need_default_topics = False
+            async with self.topics_lock:
+                if all(topic.status in ["successful", "failed"] for topic in self.topics):
+                    need_default_topics = True
 
-    async def broadcast_top_topics(self):
+            if need_default_topics:
+                await self.add_default_topics()
+            
+            await asyncio.sleep(1)  # Check periodically
+
+    async def add_default_topics(self):
+        async with self.topics_lock:
+            if len(self.topics) < MAX_NR_TOPICS_FOR_ALLOW_MORE:
+                for i in range(6):
+                    self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
+                self.topics = deque(sorted(self.topics, reverse=True))
+                await self.broadcast_top_topics()
+        logging.debug("Default topics added")
+
+    async def broadcast_top_topics(self, client = None):
         top_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
-        message = json.dumps({
-            "top_topics": [
-                {"topic": t.topic, "points": t.points, "status": t.status, "user": t.user}
-                for t in top_topics
-            ]
-        })
-        await asyncio.gather(*(client.send_text(message) for client in self.clients))
+        cards = [Div(f"{item.topic} - {item.user} - {item.status} - {item.points} points", cls="card") for item in top_topics]
+
+        with self.clients_lock:
+            print("self.clients len")
+            print(len(self.clients))
+            clients = self.clients if client is None else [client]
+            for client in clients.copy():
+                try:
+                    await client(Div(*cards, id="next_topics"))
+                except:
+                    self.clients.remove(client)
+                    logging.debug(f"Removed disconnected client: {client}")
         logging.debug("Broadcasting top topics")
-
-class WebSocketManager(WebSocketEndpoint):
-    encoding = "json"
-    async def on_connect(self, websocket: WebSocket):
-        await websocket.accept()
-        task_manager = self.scope['app'].state.task_manager
-        user_id = f"user_{random.randint(1000, 9999)}"  # Simulated user identification
-        task_manager.clients.add(websocket)
-        task_manager.users[user_id] = False
-        if user_id not in task_manager.user_points:
-            task_manager.user_points[user_id] = 20  # Initialize user with 20 points
-        logging.info(f"Client connected: {user_id}")
-        self.scope['user_id'] = user_id
-        self.scope['task_manager'] = task_manager
-
-    async def on_receive(self, websocket: WebSocket, data):
-        user_id = self.scope['user_id']
-        topic = data.get('topic')
-        points = data.get('points', 0)
-        if topic:
-            response = await self.scope['task_manager'].add_topic(topic, points, user_id)
-            await websocket.send_json(response)
-        elif data.get('action') == 'consume':
-            consumed_topic = await self.scope['task_manager'].consume_successful_topic()
-            if consumed_topic:
-                await websocket.send_json({
-                    "consumed_topic": consumed_topic.topic,
-                    "points": consumed_topic.points,
-                    "user": consumed_topic.user
-                })
-            else:
-                await websocket.send_json({"message": "No successful topic to consume"})
-        elif data.get('action') == 'choose':
-            await self.scope['task_manager'].user_choice(user_id)
-
-    async def on_disconnect(self, websocket: WebSocket, close_code: int):
-        self.scope['task_manager'].clients.remove(websocket)
-        logging.info(f"Client disconnected: {self.scope['user_id']}")
 
 async def app_startup():
     num_executors = 2  # Change this to run more executors
     task_manager = TaskManager(num_executors)
     app.state.task_manager = task_manager
-    #todo: uncomments
-    #asyncio.create_task(task_manager.monitor_topics())
+    asyncio.create_task(task_manager.monitor_topics())
     for i in range(num_executors):
         asyncio.create_task(task_manager.run_executor(i))
 
-middleware = [
-    Middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
-]
-routes = [
-    WebSocketRoute("/ws", WebSocketManager)
-]
-app = Starlette(debug=True, routes=routes, middleware=middleware, on_startup=[app_startup])
+app = FastHTML(hdrs=(css), ws_hdr=True, on_startup=[app_startup], debug=True)
+rt = app.route
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8000)
+@rt('/')
+async def get(request):
+    tabs = Nav(
+        A("PLAY", href="#", role="button", cls="secondary"),
+        A("LEADERBOARD", href="#", role="button", cls="secondary"),
+        A("FAQ", href="#", role="button", cls="secondary"),
+        cls="tabs"
+    )
+    
+    countdown = Div("COUNTDOWN FROM 00:20 TO 00:00", cls="countdown")
+    current_topic = Div("CURRENT TOPIC NAME", cls="current-topic")
+    
+    options = Div(
+        Button("OPTION #1", cls="primary"),
+        Button("OPTION #2", cls="primary"),
+        Button("OPTION #3", cls="primary"),
+        Button("OPTION #4", cls="primary"),
+        cls="options"
+    )
+    
+    left_panel = Div(
+        Div(id="next_topics"),
+        Div(
+            Textarea(placeholder="TEXT AREA FOR WRITING THE TOPIC"),
+            Input(type="number", placeholder="NR POINTS"),
+            Button("BID", cls="primary"),
+            cls="text-area"
+        ),
+        cls="left-panel"
+    )
+    
+    right_panel = Div(
+        countdown,
+        current_topic,
+        options,
+        cls="right-panel"
+    )
+    
+    main_content = Div(
+        left_panel,
+        right_panel,
+        cls="main"
+    )
+    
+    container = Div(
+        tabs,
+        main_content,
+        cls="container",
+        hx_ext='ws', ws_connect='/ws'
+    )
+    
+    return container
+
+async def on_connect(send, ws):
+    task_manager = app.state.task_manager
+    with task_manager.clients_lock:
+        task_manager.clients.add(send)
+    user_id = f"user_{random.randint(1000, 9999)}"  # Simulated user identification
+    task_manager.users[user_id] = False
+    if user_id not in task_manager.user_points:
+        task_manager.user_points[user_id] = 20  # Initialize user with 20 points
+    logging.info(f"Client connected: {user_id}")
+    ws.scope['user_id'] = user_id
+    ws.scope['task_manager'] = task_manager
+    await task_manager.broadcast_top_topics(send)
+
+async def on_disconnect(send, ws):
+    print("Calling on_disconnect")
+    print(len(app.state.task_manager.clients))
+    task_manager = app.state.task_manager
+    with task_manager.clients_lock:
+        print("I'm inside the lock")
+        if send in task_manager.clients.copy():
+            task_manager.clients.remove(send)
+            print("Client was removed and printing len clients")
+            print(len(task_manager.clients))
+    logging.info(f"Client disconnected: {ws.scope['user_id']}")
+
+@app.ws('/ws', conn=on_connect, disconn=on_disconnect)
+async def ws(send):
+    pass
+
+run_uv()
