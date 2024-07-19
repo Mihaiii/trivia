@@ -86,6 +86,7 @@ class TaskManager:
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
+            # HERE WE SIMULATE THE LLM CALLS AND RESPONSES. FOR THE MOMENT WE FAKE THE PROCESS AND MOVE EVERYTHING IN SUCCESSFUL STATUS.
             if topic.status == "pending":
                 topic.status = random.choice(["computing"]) #TODO: ["computing", "failed"]
             elif topic.status == "computing":
