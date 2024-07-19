@@ -127,7 +127,7 @@ class TaskManager:
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
             #TODO:add broadcast current topic
-            #await self.broadcast_current_topic()
+            await self.broadcast_current_topic()
             await self.broadcast_next_topics()
             await self.broadcast_past_topics()
             logging.debug(f"Topic consumed: {topic.topic}")
@@ -218,6 +218,20 @@ class TaskManager:
                     logging.debug(f"Removed disconnected client: {client}")
             #logging.debug("Broadcasting past topics")
 
+    async def broadcast_current_topic(self, client = None):
+        current_topic_html = [
+            Div(f"Current Topic: {self.current_topic.topic}", cls="card"),
+            Div(f"User: {self.current_topic.user}\nPoints: {self.current_topic.points}\n", cls="card")
+        ]
+        with self.clients_lock:
+            clients = self.clients if client is None else [client]
+            for client in clients.copy():
+                try:
+                    await client(Div(*current_topic_html, id="current_topic"))
+                except:
+                    self.clients.remove(client)
+                    logging.debug(f"Removed disconnected client: {client}")
+
 async def app_startup():
     num_executors = 2  # Change this to run more executors
     task_manager = TaskManager(num_executors)
@@ -239,7 +253,7 @@ async def get(request):
     )
     
     countdown = Div("COUNTDOWN FROM 00:20 TO 00:00", cls="countdown")
-    current_topic = Div("CURRENT TOPIC NAME", cls="current-topic")
+    current_topic = Div(id="current_topic")
     
     options = Div(
         Button("OPTION #1", cls="primary"),
@@ -300,6 +314,8 @@ async def on_connect(send, ws):
     ws.scope['user_id'] = user_id
     ws.scope['task_manager'] = task_manager
     await task_manager.broadcast_next_topics(send)
+    if task_manager.current_topic:
+        await task_manager.broadcast_current_topic(send)
     await task_manager.broadcast_past_topics(send)
 
 async def on_disconnect(send, ws):
