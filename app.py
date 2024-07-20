@@ -56,8 +56,6 @@ class Topic:
     winners: List[str] = field(default_factory=list, compare=False)
     question: Question = field(default=None, compare=False)
     
-    question: Question = field(default=None, compare=False)
-    
     def __hash__(self):
         return hash((self.points, self.topic, self.user))
 
@@ -115,13 +113,6 @@ class TaskManager:
                                           f"option C for {topic.topic}",
                                           f"option D for {topic.topic}",
                                           "C")
-                # SIMULATE A LLM GENERATED QUESTION WITH OPTIONS AND A CORRECT ANSWER
-                topic.question = Question(f"Question title for topic: {topic.topic}", 
-                                          f"option A for {topic.topic}", 
-                                          f"option B for {topic.topic}",
-                                          f"option C for {topic.topic}",
-                                          f"option D for {topic.topic}",
-                                          "C")
                 topic.status = random.choice(["successful"]) #TODO: ["successful", "failed"]
             
             await self.broadcast_next_topics()
@@ -159,7 +150,6 @@ class TaskManager:
                 
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
-            await self.broadcast_current_question()
             await self.broadcast_current_question()
             await self.broadcast_next_topics()
             await self.broadcast_past_topics()
@@ -408,6 +398,7 @@ async def get(request):
     return container
 
 async def on_connect(send, ws):
+    global current_topic
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         task_manager.clients.add(send)
@@ -419,9 +410,8 @@ async def on_connect(send, ws):
     ws.scope['user_id'] = user_id
     ws.scope['task_manager'] = task_manager
     await task_manager.broadcast_next_topics(send)
-    #We might have a topic, but we don't yet have the LLM generated question and that's what we need to broadcast
-    #if task_manager.current_topic:
-    #    await task_manager.broadcast_current_topic(send)
+    if current_topic:
+        await task_manager.broadcast_current_question(send)
     await task_manager.broadcast_past_topics(send)
 
 async def on_disconnect(send, ws):
