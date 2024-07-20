@@ -260,7 +260,6 @@ class TaskManager:
             #logging.debug("Broadcasting past topics")
 
     async def broadcast_current_question(self, client = None):
-    async def broadcast_current_question(self, client = None):
         # current_topic_html = [
         #     Div(f"Current Topic: {current_topic.topic}", cls="card"),
         #     Div(f"User: {current_topic.user}\nPoints: {current_topic.points}\n", cls="card")
