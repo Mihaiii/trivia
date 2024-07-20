@@ -32,7 +32,8 @@ css = [
     Style('.right { float: right }'),
     Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; }'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
-    Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }')
+    Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
+    Style('.primary:active { background-color: #0056b3; }')
 ]
 
 @dataclass(order=True)
@@ -232,15 +233,16 @@ class TaskManager:
         #     Div(f"Current Topic: {self.current_topic.topic}", cls="card"),
         #     Div(f"User: {self.current_topic.user}\nPoints: {self.current_topic.points}\n", cls="card")
         # ]
-        current_topic_html = Div(Div(self.current_topic.topic), Div(self.current_topic.user, cls="item left"), Div(f"{self.current_topic.points} pts", cls="item right"), cls="card")
+        current_topic_html = Div(Div(self.current_topic.topic, style="font-size: 30px;"), Div(self.current_topic.user, cls="item left"), Div(f"{self.current_topic.points} pts", cls="item right"), cls="card")
         with self.clients_lock:
             clients = self.clients if client is None else [client]
             for client in clients.copy():
                 try:
-                    await client(Div(*current_topic_html, id="current_topic", cls='card'))
+                    await client(Div(current_topic_html, id="current_topic"))
                 except:
                     self.clients.remove(client)
                     logging.debug(f"Removed disconnected client: {client}")
+
 
 async def app_startup():
     num_executors = 2  # Change this to run more executors
@@ -270,7 +272,8 @@ async def get(request):
         Button("OPTION #2", cls="primary"),
         Button("OPTION #3", cls="primary"),
         Button("OPTION #4", cls="primary"),
-        cls="options"
+        cls="options",
+        style="display: flex; flex-direction: column; gap: 10px; "
     )
     
     left_panel = Div(
@@ -281,7 +284,7 @@ async def get(request):
             Button("BID", cls="primary"),
             cls="text-area"
         ),
-        cls="side-panel"
+        cls="side-panel",
     )
     middle_panel = Div(
         countdown,
