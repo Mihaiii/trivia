@@ -36,6 +36,15 @@ css = [
     Style('.primary:active { background-color: #0056b3; }')
 ]
 
+@dataclass
+class Question:
+    title: str
+    option_A: str
+    option_B: str
+    option_C: str
+    option_D: str
+    answer: str
+    
 @dataclass(order=True)
 class Topic:
     points: int
@@ -43,7 +52,8 @@ class Topic:
     status: str = field(default="pending", compare=False)
     user: str = field(default="[bot]", compare=False)
     winners: List[str] = field(default_factory=list, compare=False)
-
+    question: Question = field(default=None, compare=False)
+    
     def __hash__(self):
         return hash((self.points, self.topic, self.user))
 
@@ -94,6 +104,13 @@ class TaskManager:
             if topic.status == "pending":
                 topic.status = random.choice(["computing"]) #TODO: ["computing", "failed"]
             elif topic.status == "computing":
+                # SIMULATE A LLM GENERATED QUESTION WITH OPTIONS AND A CORRECT ANSWER
+                topic.question = Question(f"Question title for topic: {topic.topic}", 
+                                          f"option A for {topic.topic}", 
+                                          f"option B for {topic.topic}",
+                                          f"option C for {topic.topic}",
+                                          f"option D for {topic.topic}",
+                                          "C")
                 topic.status = random.choice(["successful"]) #TODO: ["successful", "failed"]
             
             await self.broadcast_next_topics()
@@ -130,8 +147,7 @@ class TaskManager:
                 
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
-            #TODO:add broadcast current topic
-            await self.broadcast_current_topic()
+            await self.broadcast_current_question()
             await self.broadcast_next_topics()
             await self.broadcast_past_topics()
             logging.debug(f"Topic consumed: {topic.topic}")
@@ -228,17 +244,31 @@ class TaskManager:
                     logging.debug(f"Removed disconnected client: {client}")
             #logging.debug("Broadcasting past topics")
 
-    async def broadcast_current_topic(self, client = None):
+    async def broadcast_current_question(self, client = None):
         # current_topic_html = [
         #     Div(f"Current Topic: {self.current_topic.topic}", cls="card"),
         #     Div(f"User: {self.current_topic.user}\nPoints: {self.current_topic.points}\n", cls="card")
         # ]
-        current_topic_html = Div(Div(self.current_topic.topic, style="font-size: 30px;"), Div(self.current_topic.user, cls="item left"), Div(f"{self.current_topic.points} pts", cls="item right"), cls="card")
+        current_question_info = Div(
+        Div(
+            Div(self.current_topic.question.title, style="font-size: 30px;"), 
+            Div(self.current_topic.user, cls="item left"), 
+            Div(f"{self.current_topic.points} pts", cls="item right"), 
+            cls="card"),
+        Div(
+            Button(self.current_topic.question.option_A, cls="primary"),
+            Button(self.current_topic.question.option_B, cls="primary"),
+            Button(self.current_topic.question.option_C, cls="primary"),
+            Button(self.current_topic.question.option_D, cls="primary"),
+            cls="options",
+            style="display: flex; flex-direction: column; gap: 10px; "
+        )
+        )
         with self.clients_lock:
             clients = self.clients if client is None else [client]
             for client in clients.copy():
                 try:
-                    await client(Div(current_topic_html, id="current_topic"))
+                    await client(Div(current_question_info, id="current_question_info"))
                 except:
                     self.clients.remove(client)
                     logging.debug(f"Removed disconnected client: {client}")
@@ -265,16 +295,7 @@ async def get(request):
     )
     
     countdown = Div("COUNTDOWN FROM 00:20 TO 00:00", cls="countdown")
-    current_topic = Div(id="current_topic")
-    
-    options = Div(
-        Button("OPTION #1", cls="primary"),
-        Button("OPTION #2", cls="primary"),
-        Button("OPTION #3", cls="primary"),
-        Button("OPTION #4", cls="primary"),
-        cls="options",
-        style="display: flex; flex-direction: column; gap: 10px; "
-    )
+    current_question_info = Div(id="current_question_info")
     
     left_panel = Div(
         Div(id="next_topics"),
@@ -288,8 +309,7 @@ async def get(request):
     )
     middle_panel = Div(
         countdown,
-        current_topic,
-        options,
+        current_question_info,
         cls="middle-panel"
     )
 
@@ -327,8 +347,9 @@ async def on_connect(send, ws):
     ws.scope['user_id'] = user_id
     ws.scope['task_manager'] = task_manager
     await task_manager.broadcast_next_topics(send)
-    if task_manager.current_topic:
-        await task_manager.broadcast_current_topic(send)
+    #We might have a topic, but we don't yet have the LLM generated question and that's what we need to broadcast
+    #if task_manager.current_topic:
+    #    await task_manager.broadcast_current_topic(send)
     await task_manager.broadcast_past_topics(send)
 
 async def on_disconnect(send, ws):
