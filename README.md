@@ -26,8 +26,7 @@ There's a project associated with this repo: https://github.com/users/Mihaiii/pr
 
 ### The meaning of the card statuses
 
-In the source code you can find a Topic class (this is refered in this documentation as "topic card") and it's what's presented in the UI (user interface) in the left panel.
-A topic card has one of the following statuses, depending in what state it is:
+In the source code, there is a `Topic` class, referred to in this documentation as a "topic card." This is what is displayed in the UI (user interface) on the left panel. A topic card can have one of the following statuses, depending on its current state:
 
 - pending - This is the initial status a topic card has. When a pending card is picked up, it's first sent to a LLM (large language model) in order to confirm the topic meets quality criterias (ex: it needs to be in english, it doesn't have to have sensitive content etc.). Only topics proposed by the humans will be validated by LLMs. If the LLM confirms that the the proposed topic is ok, the status of the card will become "computing". Otherwise, it becomes "failed".
 - computing - Once a topic card has computing status, it's sent to an LLM to generate a trivia question and possible answers given the received topic. This process can take few seconds. When it finishes, we'll have status successful if all is ok or status failed, if the LLM failed to generate the question for some reason.
