@@ -56,6 +56,8 @@ class Topic:
     winners: List[str] = field(default_factory=list, compare=False)
     question: Question = field(default=None, compare=False)
     
+    question: Question = field(default=None, compare=False)
+    
     def __hash__(self):
         return hash((self.points, self.topic, self.user))
 
@@ -113,6 +115,13 @@ class TaskManager:
                                           f"option C for {topic.topic}",
                                           f"option D for {topic.topic}",
                                           "C")
+                # SIMULATE A LLM GENERATED QUESTION WITH OPTIONS AND A CORRECT ANSWER
+                topic.question = Question(f"Question title for topic: {topic.topic}", 
+                                          f"option A for {topic.topic}", 
+                                          f"option B for {topic.topic}",
+                                          f"option C for {topic.topic}",
+                                          f"option D for {topic.topic}",
+                                          "C")
                 topic.status = random.choice(["successful"]) #TODO: ["successful", "failed"]
             
             await self.broadcast_next_topics()
@@ -150,6 +159,7 @@ class TaskManager:
                 
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
+            await self.broadcast_current_question()
             await self.broadcast_current_question()
             await self.broadcast_next_topics()
             await self.broadcast_past_topics()
@@ -249,6 +259,7 @@ class TaskManager:
                     logging.debug(f"Removed disconnected client: {client}")
             #logging.debug("Broadcasting past topics")
 
+    async def broadcast_current_question(self, client = None):
     async def broadcast_current_question(self, client = None):
         # current_topic_html = [
         #     Div(f"Current Topic: {current_topic.topic}", cls="card"),
