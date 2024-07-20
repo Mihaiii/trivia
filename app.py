@@ -26,7 +26,10 @@ css = [
     Style('body { font-family: Arial, sans-serif; }'),
     Style('.container { display: flex; flex-direction: column; height: 100vh; }'),
     Style('.main { display: flex; flex: 1; flex-direction: row; }'),
-    Style('.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; }'),
+    Style('.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; text-align: center; overflow: hidden;}'),
+    Style('.item { display: inline-block; }'),
+    Style('.left { float: left; }'),
+    Style('.right { float: right }'),
     Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; }'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
     Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }')
@@ -191,7 +194,13 @@ class TaskManager:
 
     async def broadcast_next_topics(self, client = None):
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
-        next_topics_html = [Div(f"{item.topic} - {item.user} - {item.status} - {item.points} points", cls="card") for item in next_topics]
+        status_dict = {
+            'failed': 'red',
+            'pending': 'white',
+            'computing': 'yellow',
+            'successful': 'green'
+        }
+        next_topics_html = [Div(Div(f"{item.topic if item.status not in ['pending','failed'] else 'Topic Censored'}"), Div(item.user, cls="item left"), Div(f"{item.points} pts", cls="item right"), cls="card", style=f"background-color: {status_dict[item.status]}") for item in next_topics]
         with self.clients_lock:
             print("self.clients len")
             print(len(self.clients))
@@ -219,15 +228,16 @@ class TaskManager:
             #logging.debug("Broadcasting past topics")
 
     async def broadcast_current_topic(self, client = None):
-        current_topic_html = [
-            Div(f"Current Topic: {self.current_topic.topic}", cls="card"),
-            Div(f"User: {self.current_topic.user}\nPoints: {self.current_topic.points}\n", cls="card")
-        ]
+        # current_topic_html = [
+        #     Div(f"Current Topic: {self.current_topic.topic}", cls="card"),
+        #     Div(f"User: {self.current_topic.user}\nPoints: {self.current_topic.points}\n", cls="card")
+        # ]
+        current_topic_html = Div(Div(self.current_topic.topic), Div(self.current_topic.user, cls="item left"), Div(f"{self.current_topic.points} pts", cls="item right"), cls="card")
         with self.clients_lock:
             clients = self.clients if client is None else [client]
             for client in clients.copy():
                 try:
-                    await client(Div(*current_topic_html, id="current_topic"))
+                    await client(Div(*current_topic_html, id="current_topic", cls='card'))
                 except:
                     self.clients.remove(client)
                     logging.debug(f"Removed disconnected client: {client}")
