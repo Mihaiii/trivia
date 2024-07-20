@@ -13,12 +13,14 @@ from typing import List
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 3 # THIS WILL BE 20. FOR NOW IT'S 3 FOR TESTING REASONS.
+QUESTION_COUNTDOWN_SEC = 10 # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5 # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30 # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6 # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
 NR_TOPICS_TO_BROADCAST = 5 # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
 BID_MIN_POINTS = 3 # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
+
+current_topic = None
 
 css = [
     picolink,
@@ -32,9 +34,19 @@ css = [
     Style('.right { float: right }'),
     Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; }'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
-    Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }')
+    Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
+    Style('.primary:active { background-color: #0056b3; }')
 ]
 
+@dataclass
+class Question:
+    title: str
+    option_A: str
+    option_B: str
+    option_C: str
+    option_D: str
+    answer: str
+    
 @dataclass(order=True)
 class Topic:
     points: int
@@ -42,7 +54,10 @@ class Topic:
     status: str = field(default="pending", compare=False)
     user: str = field(default="[bot]", compare=False)
     winners: List[str] = field(default_factory=list, compare=False)
-
+    question: Question = field(default=None, compare=False)
+    
+    question: Question = field(default=None, compare=False)
+    
     def __hash__(self):
         return hash((self.points, self.topic, self.user))
 
@@ -60,7 +75,6 @@ class TaskManager:
         self.users_lock = asyncio.Lock()
         self.executors = [concurrent.futures.ThreadPoolExecutor(max_workers=1) for _ in range(num_executors)]
         self.executor_tasks = [set() for _ in range(num_executors)]
-        self.current_topic = None
         self.current_topic_start_time = None
         self.users = {}  # Track if users have chosen an option
         self.user_points = {}  # Track user points
@@ -86,6 +100,7 @@ class TaskManager:
             await asyncio.sleep(0.1)  # Avoid busy-waiting
     
     async def update_status(self, topic: Topic):
+        global current_topic
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
@@ -93,11 +108,25 @@ class TaskManager:
             if topic.status == "pending":
                 topic.status = random.choice(["computing"]) #TODO: ["computing", "failed"]
             elif topic.status == "computing":
+                # SIMULATE A LLM GENERATED QUESTION WITH OPTIONS AND A CORRECT ANSWER
+                topic.question = Question(f"Question title for topic: {topic.topic}", 
+                                          f"option A for {topic.topic}", 
+                                          f"option B for {topic.topic}",
+                                          f"option C for {topic.topic}",
+                                          f"option D for {topic.topic}",
+                                          "C")
+                # SIMULATE A LLM GENERATED QUESTION WITH OPTIONS AND A CORRECT ANSWER
+                topic.question = Question(f"Question title for topic: {topic.topic}", 
+                                          f"option A for {topic.topic}", 
+                                          f"option B for {topic.topic}",
+                                          f"option C for {topic.topic}",
+                                          f"option D for {topic.topic}",
+                                          "C")
                 topic.status = random.choice(["successful"]) #TODO: ["successful", "failed"]
             
             await self.broadcast_next_topics()
 
-            if topic.status == "successful" and self.current_topic is None:
+            if topic.status == "successful" and current_topic is None:
                 should_consume = True
             
             if topic.status == "failed":
@@ -109,6 +138,7 @@ class TaskManager:
             await self.consume_successful_topic()
 
     async def consume_successful_topic(self):
+        global current_topic
         topic = None
         logging.debug(f"consume_successful_topic before lock")
         async with self.topics_lock:
@@ -121,7 +151,7 @@ class TaskManager:
                 self.topics.remove(topic)
                 async with self.past_topics_lock:
                     self.past_topics.append(topic)
-                self.current_topic = topic
+                current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 self.current_timeout_task = asyncio.create_task(self.topic_timeout())
                 async with self.users_lock:
@@ -129,8 +159,8 @@ class TaskManager:
                 
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
-            #TODO:add broadcast current topic
-            await self.broadcast_current_topic()
+            await self.broadcast_current_question()
+            await self.broadcast_current_question()
             await self.broadcast_next_topics()
             await self.broadcast_past_topics()
             logging.debug(f"Topic consumed: {topic.topic}")
@@ -147,6 +177,7 @@ class TaskManager:
             pass  # Handle cancellation if the task is cancelled
 
     async def check_topic_completion(self):
+        global current_topic
         should_consume = False
         async with self.users_lock:
             all_users_chosen = all(self.users.values())
@@ -156,8 +187,8 @@ class TaskManager:
             current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
-                logging.debug(f"Completing topic: {self.current_topic.topic}")
+            if current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
+                logging.debug(f"Completing topic: {current_topic.topic}")
                 should_consume = True
         
         if should_consume:
@@ -214,6 +245,7 @@ class TaskManager:
         #logging.debug("Broadcasting top topics")
 
     async def broadcast_past_topics(self, client = None):
+        global current_topic
         async with self.past_topics_lock:
             past_topics = list(self.past_topics)[::-1]
         past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in past_topics]
@@ -227,20 +259,37 @@ class TaskManager:
                     logging.debug(f"Removed disconnected client: {client}")
             #logging.debug("Broadcasting past topics")
 
-    async def broadcast_current_topic(self, client = None):
+    async def broadcast_current_question(self, client = None):
+    async def broadcast_current_question(self, client = None):
         # current_topic_html = [
-        #     Div(f"Current Topic: {self.current_topic.topic}", cls="card"),
-        #     Div(f"User: {self.current_topic.user}\nPoints: {self.current_topic.points}\n", cls="card")
+        #     Div(f"Current Topic: {current_topic.topic}", cls="card"),
+        #     Div(f"User: {current_topic.user}\nPoints: {current_topic.points}\n", cls="card")
         # ]
-        current_topic_html = Div(Div(self.current_topic.topic), Div(self.current_topic.user, cls="item left"), Div(f"{self.current_topic.points} pts", cls="item right"), cls="card")
+        current_question_info = Div(
+        Div(
+            Div(current_topic.question.title, style="font-size: 30px;"), 
+            Div(current_topic.user, cls="item left"), 
+            Div(f"{current_topic.points} pts", cls="item right"), 
+            cls="card"),
+        Div(
+            Button(current_topic.question.option_A, cls="primary", hx_post="/choose_option_A", hx_target="#question_options", hx_swap="outerHTML"),
+            Button(current_topic.question.option_B, cls="primary", hx_post="/choose_option_B", hx_target="#question_options", hx_swap="outerHTML"),
+            Button(current_topic.question.option_C, cls="primary", hx_post="/choose_option_C", hx_target="#question_options", hx_swap="outerHTML"),
+            Button(current_topic.question.option_D, cls="primary", hx_post="/choose_option_D", hx_target="#question_options", hx_swap="outerHTML"),
+            cls="options",
+            style="display: flex; flex-direction: column; gap: 10px; ",
+            id="question_options"
+        )
+        )
         with self.clients_lock:
             clients = self.clients if client is None else [client]
             for client in clients.copy():
                 try:
-                    await client(Div(*current_topic_html, id="current_topic", cls='card'))
+                    await client(Div(current_question_info, id="current_question_info"))
                 except:
                     self.clients.remove(client)
                     logging.debug(f"Removed disconnected client: {client}")
+
 
 async def app_startup():
     num_executors = 2  # Change this to run more executors
@@ -253,6 +302,62 @@ async def app_startup():
 app = FastHTML(hdrs=(css), ws_hdr=True, on_startup=[app_startup], debug=True)
 rt = app.route
 
+@rt('/choose_option_A')
+async def post(request):
+    global current_topic
+    #TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    return Div(
+        Button(current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        cls="options",
+        style="display: flex; flex-direction: column; gap: 10px; ",
+        id="question_options"
+    )
+
+@rt('/choose_option_B')
+async def post(request):
+    global current_topic
+    #TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    return Div(
+        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_B, cls="primarly", hx_post="/choose_option_B", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        cls="options",
+        style="display: flex; flex-direction: column; gap: 10px; ",
+        id="question_options"
+    )
+
+@rt('/choose_option_C')
+async def post(request):
+    global current_topic
+    #TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    return Div(
+        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_C, cls="primarly", hx_post="/choose_option_C", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        cls="options",
+        style="display: flex; flex-direction: column; gap: 10px; ",
+        id="question_options"
+    )
+
+@rt('/choose_option_D')
+async def post(request):
+    global current_topic
+    #TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    return Div(
+        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        Button(current_topic.question.option_D, cls="primarly", hx_post="/choose_option_D", hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+        cls="options",
+        style="display: flex; flex-direction: column; gap: 10px; ",
+        id="question_options"
+    )
+    
 @rt('/')
 async def get(request):
     tabs = Nav(
@@ -263,15 +368,7 @@ async def get(request):
     )
     
     countdown = Div("COUNTDOWN FROM 00:20 TO 00:00", cls="countdown")
-    current_topic = Div(id="current_topic")
-    
-    options = Div(
-        Button("OPTION #1", cls="primary"),
-        Button("OPTION #2", cls="primary"),
-        Button("OPTION #3", cls="primary"),
-        Button("OPTION #4", cls="primary"),
-        cls="options"
-    )
+    current_question_info = Div(id="current_question_info")
     
     left_panel = Div(
         Div(id="next_topics"),
@@ -281,12 +378,11 @@ async def get(request):
             Button("BID", cls="primary"),
             cls="text-area"
         ),
-        cls="side-panel"
+        cls="side-panel",
     )
     middle_panel = Div(
         countdown,
-        current_topic,
-        options,
+        current_question_info,
         cls="middle-panel"
     )
 
@@ -324,8 +420,9 @@ async def on_connect(send, ws):
     ws.scope['user_id'] = user_id
     ws.scope['task_manager'] = task_manager
     await task_manager.broadcast_next_topics(send)
-    if task_manager.current_topic:
-        await task_manager.broadcast_current_topic(send)
+    #We might have a topic, but we don't yet have the LLM generated question and that's what we need to broadcast
+    #if task_manager.current_topic:
+    #    await task_manager.broadcast_current_topic(send)
     await task_manager.broadcast_past_topics(send)
 
 async def on_disconnect(send, ws):
