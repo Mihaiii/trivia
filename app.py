@@ -140,8 +140,6 @@ class TaskManager:
                 topic = successful_topics[0]  # Get the highest points successful topic
                 logging.debug(f"Topic obtained: {topic.topic}")
                 self.topics.remove(topic)
-                async with self.past_topics_lock:
-                    self.past_topics.append(topic)
                 current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 self.current_timeout_task = asyncio.create_task(self.topic_timeout())
@@ -182,6 +180,8 @@ class TaskManager:
                 should_consume = True
         
         if should_consume:
+            async with self.past_topics_lock:
+                self.past_topics.append(current_topic)
             await self.consume_successful_topic()
 
     async def remove_failed_topic(self, topic: Topic):
