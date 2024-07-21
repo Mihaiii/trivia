@@ -13,7 +13,7 @@ from typing import List
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 10 # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 3 # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5 # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30 # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6 # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -213,6 +213,13 @@ class TaskManager:
                 await self.broadcast_next_topics()
                 logging.debug("Default topics added")
 
+    async def add_user_topics(self, nr: int = 100, msg: str = "example"):
+        async with self.topics_lock:
+            self.topics.append(Topic(points=int(nr), topic=msg, user="user"))
+            self.topics = deque(sorted(self.topics, reverse=True))
+            # await self.broadcast_next_topics()
+            logging.debug("User topic added")
+
     async def broadcast_next_topics(self, client = None):
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
         status_dict = {
@@ -250,10 +257,6 @@ class TaskManager:
             #logging.debug("Broadcasting past topics")
 
     async def broadcast_current_question(self, client = None):
-        # current_topic_html = [
-        #     Div(f"Current Topic: {current_topic.topic}", cls="card"),
-        #     Div(f"User: {current_topic.user}\nPoints: {current_topic.points}\n", cls="card")
-        # ]
         current_question_info = Div(
         Div(
             Div(current_topic.question.title, style="font-size: 30px;"), 
@@ -346,7 +349,7 @@ async def post(request):
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
     )
-    
+
 @rt('/')
 async def get(request):
     tabs = Nav(
@@ -355,17 +358,17 @@ async def get(request):
         A("FAQ", href="#", role="button", cls="secondary"),
         cls="tabs"
     )
-    
+
     countdown = Div("COUNTDOWN FROM 00:20 TO 00:00", cls="countdown")
     current_question_info = Div(id="current_question_info")
     
     left_panel = Div(
         Div(id="next_topics"),
         Div(
-            Textarea(placeholder="TEXT AREA FOR WRITING THE TOPIC"),
-            Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS),
-            Button("BID", cls="primary"),
-            cls="text-area"
+            Textarea(placeholder="TEXT AREA FOR WRITING THE TOPIC", ws_send=True),
+            Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, ws_send=True, id='nr'),
+            Button("BID", cls="primary", ws_send=True),
+            cls="text-area",ws_connect='/add_topic', hx_ext='ws'
         ),
         cls="side-panel",
     )
@@ -429,5 +432,12 @@ async def on_disconnect(send, ws):
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
 async def ws(send):
     pass
+
+@app.ws('/add_topic', conn=on_connect, disconn=on_disconnect)
+async def ws(send):
+    task_manager = app.state.task_manager
+    with task_manager.clients_lock:
+        await task_manager.add_user_topics()
+    print("User topic added")
 
 run_uv()
