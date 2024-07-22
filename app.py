@@ -9,6 +9,7 @@ import logging
 import random
 import threading
 from typing import List
+from auth import HuggingFaceClient
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -37,7 +38,12 @@ css = [
     Style('.primary:active { background-color: #0056b3; }')
 ]
 countdown = QUESTION_COUNTDOWN_SEC
-
+#TODO: remove the app before making the repo public and properly handle the info, ofc
+huggingface_client = HuggingFaceClient(
+    client_id="f7542bbf-4343-482d-8b58-9343f4f9e3ca",
+    client_secret="04f5de00-4158-44e2-a794-443f71586ee1",
+    redirect_uri="http://localhost:8000/auth/callback"
+)
 
 @dataclass
 class Question:
@@ -278,19 +284,7 @@ class TaskManager:
                 Div(current_topic.user, cls="item left"),
                 Div(f"{current_topic.points} pts", cls="item right"),
                 cls="card"),
-            Div(
-                Button(current_topic.question.option_A, cls="primary", hx_post="/choose_option_A",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                Button(current_topic.question.option_B, cls="primary", hx_post="/choose_option_B",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                Button(current_topic.question.option_C, cls="primary", hx_post="/choose_option_C",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                Button(current_topic.question.option_D, cls="primary", hx_post="/choose_option_D",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                cls="options",
-                style="display: flex; flex-direction: column; gap: 10px; ",
-                id="question_options"
-            )
+            unselectedOptions()
         )
         with self.clients_lock:
             clients = self.clients if client is None else [client]
@@ -333,12 +327,19 @@ async def app_startup():
 
 app = FastHTML(hdrs=(css), ws_hdr=True, on_startup=[app_startup], debug=True)
 rt = app.route
-
+setup_toasts(app)
 
 @rt('/choose_option_A')
-async def post(request):
+async def post(session):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
+    task_manager = app.state.task_manager
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
     global current_topic
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    # TODO: save the user's choice based on the login data in the database
     return Div(
         Button(current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -355,9 +356,16 @@ async def post(request):
 
 
 @rt('/choose_option_B')
-async def post(request):
+async def post(session):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
+    task_manager = app.state.task_manager
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
     global current_topic
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    # TODO: save the user's choice based on the login data in the database
     return Div(
         Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -374,9 +382,16 @@ async def post(request):
 
 
 @rt('/choose_option_C')
-async def post(request):
+async def post(session, app):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
+    task_manager = app.state.task_manager
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
     global current_topic
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    # TODO: save the user's choice based on the login data in the database
     return Div(
         Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -393,9 +408,16 @@ async def post(request):
 
 
 @rt('/choose_option_D')
-async def post(request):
+async def post(session):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
+    task_manager = app.state.task_manager
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
     global current_topic
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    # TODO: save the user's choice based on the login data in the database
     return Div(
         Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -410,6 +432,42 @@ async def post(request):
         id="question_options"
     )
 
+def unselectedOptions():
+    return Div(
+        Button(current_topic.question.option_A, cls="primary", hx_post="/choose_option_A",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        Button(current_topic.question.option_B, cls="primary", hx_post="/choose_option_B",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        Button(current_topic.question.option_C, cls="primary", hx_post="/choose_option_C",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        Button(current_topic.question.option_D, cls="primary", hx_post="/choose_option_D",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        cls="options",
+        style="display: flex; flex-direction: column; gap: 10px; ",
+        id="question_options"
+    )
+
+@rt("/auth/callback")
+def get(app, session, code: str = None):
+    try:
+        user_info = huggingface_client.retr_info(code)
+    except Exception as e:
+        error_message = str(e)
+        print(f"Error occurred: {error_message}")
+        return f"An error occurred: {error_message}"
+    user_id = user_info.get("preferred_username")
+    task_manager = app.state.task_manager
+    if(user_id in task_manager.users):
+        return Response(status_code=401, content="A user can be logged in on only one page. If you want to log in here, please log out from the other page.")
+    
+    if 'session_id' not in session:
+        session['session_id'] = user_id
+    task_manager.users[user_id] = False
+    if user_id not in task_manager.user_points:
+        task_manager.user_points[user_id] = 20
+    logging.info(f"Client connected: {user_id}")
+    #ws.scope['user_id'] = user_id
+    return RedirectResponse(url="/")
 
 @rt('/')
 async def get(request):
@@ -437,9 +495,12 @@ async def get(request):
         current_question_info,
         cls="middle-panel"
     )
-
+    #if app.scope['user_id'] != None:
+    #   top_right_corner = ws.scope['user_id'] 
+    #else:
+    top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
     right_panel = Div(
-        Button("Login / nr of points", cls="primary"),
+        top_right_corner,
         Div(id="past_topics"),
         cls="side-panel"
     )
@@ -470,25 +531,18 @@ async def post(topic: str, points: int):
                )
 
 
-async def on_connect(send, ws):
+async def on_connect(send):
     global current_topic
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         task_manager.clients.add(send)
-    user_id = f"user_{random.randint(1000, 9999)}"  # Simulated user identification
-    task_manager.users[user_id] = False
-    if user_id not in task_manager.user_points:
-        task_manager.user_points[user_id] = 20  # Initialize user with 20 points
-    logging.info(f"Client connected: {user_id}")
-    ws.scope['user_id'] = user_id
-    ws.scope['task_manager'] = task_manager
     await task_manager.broadcast_next_topics(send)
     if current_topic:
         await task_manager.broadcast_current_question(send)
     await task_manager.broadcast_past_topics(send)
 
 
-async def on_disconnect(send, ws):
+async def on_disconnect(send, session):
     print("Calling on_disconnect")
     print(len(app.state.task_manager.clients))
     task_manager = app.state.task_manager
@@ -496,9 +550,10 @@ async def on_disconnect(send, ws):
         print("I'm inside the lock")
         if send in task_manager.clients.copy():
             task_manager.clients.remove(send)
+            #I should probably somehow do this at the other places where we have clients.remove
+            session['session_id'] = None
             print("Client was removed and printing len clients")
             print(len(task_manager.clients))
-    logging.info(f"Client disconnected: {ws.scope['user_id']}")
 
 
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
