@@ -189,7 +189,7 @@ class TaskManager:
         while True:
             need_default_topics = False
             async with self.topics_lock:
-                if all(topic.status in ["successful", "failed"] for topic in self.topics) or len(list(self.topics)) < 5:
+                if all(topic.status in ["successful", "failed"] for topic in self.topics):
                     need_default_topics = True
 
             if need_default_topics:
