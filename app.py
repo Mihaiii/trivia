@@ -464,13 +464,15 @@ def get(app, session, code: str = None):
         session['session_id'] = user_id
     task_manager.users[user_id] = False
     if user_id not in task_manager.user_points:
+        #TODO: save in DB instead
         task_manager.user_points[user_id] = 20
     logging.info(f"Client connected: {user_id}")
     #ws.scope['user_id'] = user_id
     return RedirectResponse(url="/")
 
 @rt('/')
-async def get(request):
+async def get(session, app):
+    task_manager = app.state.task_manager
     global countdown
     tabs = Nav(
         A("PLAY", href="#", role="button", cls="secondary"),
@@ -495,10 +497,13 @@ async def get(request):
         current_question_info,
         cls="middle-panel"
     )
-    #if app.scope['user_id'] != None:
-    #   top_right_corner = ws.scope['user_id'] 
-    #else:
-    top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
+    if 'session_id' not in session:
+        top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
+    else:
+        user_id = session['session_id']
+        #TODO: get from DB instead - this is how it should be and besides, at refresh (why, though? We shouldn't based on on_disconnect),
+        #we still get session_id, but we don't have task_manager.user_points[user_id]
+        top_right_corner = Div(user_id + ": " + task_manager.user_points[user_id])
     right_panel = Div(
         top_right_corner,
         Div(id="past_topics"),
