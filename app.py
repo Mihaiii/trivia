@@ -10,7 +10,6 @@ import random
 import threading
 from typing import List
 
-
 logging.basicConfig(level=logging.DEBUG)
 
 QUESTION_COUNTDOWN_SEC = 10 # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
@@ -96,7 +95,6 @@ class TaskManager:
                 async with self.topics_lock:
                     self.executor_tasks[executor_id].remove(topic_to_process)
             await asyncio.sleep(0.1)  # Avoid busy-waiting
-    
     async def update_status(self, topic: Topic):
         global current_topic
         await asyncio.sleep(1)  # Simulate processing time
@@ -119,12 +117,9 @@ class TaskManager:
 
             if topic.status == "successful" and current_topic is None:
                 should_consume = True
-            
             if topic.status == "failed":
                 await asyncio.create_task(self.remove_failed_topic(topic))
-            
             #logging.debug(f"Topic updated: {topic.topic} to {topic.status}")
-        
         if should_consume:
             await self.consume_successful_topic()
 
@@ -145,7 +140,6 @@ class TaskManager:
                 self.current_timeout_task = asyncio.create_task(self.topic_timeout())
                 async with self.users_lock:
                     self.users = {user: False for user in self.users.keys()}  # Reset user choices
-                
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
             await self.broadcast_current_question()
@@ -178,7 +172,6 @@ class TaskManager:
             if current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
                 logging.debug(f"Completing topic: {current_topic.topic}")
                 should_consume = True
-        
         if should_consume:
             async with self.past_topics_lock:
                 self.past_topics.append(current_topic)
@@ -201,7 +194,6 @@ class TaskManager:
 
             if need_default_topics:
                 await self.add_default_topics()
-            
             await asyncio.sleep(1)  # Check periodically
 
     async def add_default_topics(self):
@@ -212,6 +204,13 @@ class TaskManager:
                 self.topics = deque(sorted(self.topics, reverse=True))
                 await self.broadcast_next_topics()
                 logging.debug("Default topics added")
+
+    async def add_user_topic(self, points: int = 100, topic: str = "example"):
+        async with self.topics_lock:
+            self.topics.append(Topic(points=points, topic=topic, user="user"))
+            self.topics = deque(sorted(self.topics, reverse=True))
+            await self.broadcast_next_topics()
+            logging.debug("User topic added")
 
     async def broadcast_next_topics(self, client = None):
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
@@ -250,10 +249,6 @@ class TaskManager:
             #logging.debug("Broadcasting past topics")
 
     async def broadcast_current_question(self, client = None):
-        # current_topic_html = [
-        #     Div(f"Current Topic: {current_topic.topic}", cls="card"),
-        #     Div(f"User: {current_topic.user}\nPoints: {current_topic.points}\n", cls="card")
-        # ]
         current_question_info = Div(
         Div(
             Div(current_topic.question.title, style="font-size: 30px;"), 
@@ -346,7 +341,7 @@ async def post(request):
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
     )
-    
+
 @rt('/')
 async def get(request):
     tabs = Nav(
@@ -355,19 +350,17 @@ async def get(request):
         A("FAQ", href="#", role="button", cls="secondary"),
         cls="tabs"
     )
-    
-    countdown = Div("COUNTDOWN FROM 00:20 TO 00:00", cls="countdown")
+
+    countdown = Div(f"COUNTDOWN: 20s", cls="countdown", hx_ext="/ws", ws_send="")
     current_question_info = Div(id="current_question_info")
-    
     left_panel = Div(
         Div(id="next_topics"),
-        Div(
-            Textarea(placeholder="TEXT AREA FOR WRITING THE TOPIC"),
-            Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS),
-            Button("BID", cls="primary"),
-            cls="text-area"
-        ),
-        cls="side-panel",
+        Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
+                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
+                 Button('BID', cls='primary'),
+                 action='/', hx_post='/bid'), hx_swap="outerHTML"
+            )
+        , cls='side-panel'
     )
     middle_panel = Div(
         countdown,
@@ -380,22 +373,31 @@ async def get(request):
         Div(id="past_topics"),
         cls="side-panel"
     )
-    
     main_content = Div(
         left_panel,
         middle_panel,
         right_panel,
         cls="main"
     )
-    
     container = Div(
         tabs,
         main_content,
         cls="container",
         hx_ext='ws', ws_connect='/ws'
     )
-    
     return container
+
+
+@rt("/bid")
+async def post(topic: str, points: int):
+    print(f"Topic: {topic}, points: {points}")
+    task_manager = app.state.task_manager
+    await task_manager.add_user_topic(topic=topic, points=points)
+    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
+                    Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
+                    Button('BID', cls='primary'),
+                    action='/', hx_post='/bid'), hx_swap="outerHTML"
+               )
 
 async def on_connect(send, ws):
     global current_topic
@@ -429,5 +431,6 @@ async def on_disconnect(send, ws):
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
 async def ws(send):
     pass
+
 
 run_uv()
