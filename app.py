@@ -40,7 +40,7 @@ css = [
     Style('.primary:active { background-color: #0056b3; }')
 ]
 countdown = QUESTION_COUNTDOWN_SEC
-task = None
+# task = None
 
 
 def reset():
@@ -91,6 +91,7 @@ class TaskManager:
         self.current_timeout_task = None
         self.clients = set()  # Track connected WebSocket clients
         self.clients_lock = threading.Lock()
+        self.task = None
 
     async def run_executor(self, executor_id: int):
         while True:
@@ -111,7 +112,6 @@ class TaskManager:
 
     async def update_status(self, topic: Topic):
         global current_topic
-        global task
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
@@ -136,7 +136,7 @@ class TaskManager:
                 await asyncio.create_task(self.remove_failed_topic(topic))
             # logging.debug(f"Topic updated: {topic.topic} to {topic.status}")
         if should_consume:
-            task = asyncio.create_task(self.count())
+            self.task = asyncio.create_task(self.count())
             await self.consume_successful_topic()
 
     async def consume_successful_topic(self):
@@ -176,7 +176,6 @@ class TaskManager:
 
     async def check_topic_completion(self):
         global current_topic
-        global task
         should_consume = False
         async with self.users_lock:
             all_users_chosen = all(self.users.values())
@@ -191,10 +190,10 @@ class TaskManager:
                 logging.debug(f"Completing topic: {current_topic.topic}")
                 should_consume = True
         if should_consume:
-            if task:
-                task.cancel()
+            if self.task:
+                self.task.cancel()
                 reset()
-            task = asyncio.create_task(self.count())
+            self.task = asyncio.create_task(self.count())
             async with self.past_topics_lock:
                 self.past_topics.append(current_topic)
             await self.consume_successful_topic()
