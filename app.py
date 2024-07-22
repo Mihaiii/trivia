@@ -189,7 +189,7 @@ class TaskManager:
         while True:
             need_default_topics = False
             async with self.topics_lock:
-                if all(topic.status in ["successful", "failed"] for topic in self.topics):
+                if all(topic.status in ["successful", "failed"] for topic in self.topics) or len(list(self.topics)) < 5:
                     need_default_topics = True
 
             if need_default_topics:
@@ -205,7 +205,7 @@ class TaskManager:
                 await self.broadcast_next_topics()
                 logging.debug("Default topics added")
 
-    async def add_user_topics(self, points: int = 100, topic: str = "example"):
+    async def add_user_topic(self, points: int = 100, topic: str = "example"):
         async with self.topics_lock:
             self.topics.append(Topic(points=points, topic=topic, user="user"))
             self.topics = deque(sorted(self.topics, reverse=True))
@@ -213,8 +213,6 @@ class TaskManager:
             logging.debug("User topic added")
 
     async def broadcast_next_topics(self, client = None):
-        if len(list(self.topics)) < 5:
-            await self.add_default_topics()
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
         status_dict = {
             'failed': 'red',
@@ -344,10 +342,8 @@ async def post(request):
         id="question_options"
     )
 
-container = None
 @rt('/')
 async def get(request):
-    global container
     tabs = Nav(
         A("PLAY", href="#", role="button", cls="secondary"),
         A("LEADERBOARD", href="#", role="button", cls="secondary"),
@@ -355,14 +351,14 @@ async def get(request):
         cls="tabs"
     )
 
-    countdown = Div("COUNTDOWN FROM 00:20 TO 00:00", cls="countdown")
+    countdown = Div(f"COUNTDOWN: 20s", cls="countdown", hx_ext="/ws", ws_send="")
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
         Div(id="next_topics"),
         Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
                  Button('BID', cls='primary'),
-                 action='/', method='post'),
+                 action='/', hx_post='/bid'), hx_swap="outerHTML"
             )
         , cls='side-panel'
     )
@@ -392,13 +388,16 @@ async def get(request):
     return container
 
 
-@app.post("/")
-async def add_topic(topic: str, points: int):
-    global container
+@rt("/bid")
+async def post(topic: str, points: int):
     print(f"Topic: {topic}, points: {points}")
     task_manager = app.state.task_manager
-    await task_manager.add_user_topics(topic=topic, points=points)
-    return container
+    await task_manager.add_user_topic(topic=topic, points=points)
+    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
+                    Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
+                    Button('BID', cls='primary'),
+                    action='/', hx_post='/bid'), hx_swap="outerHTML"
+               )
 
 async def on_connect(send, ws):
     global current_topic
