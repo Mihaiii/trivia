@@ -12,7 +12,7 @@ from typing import List
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 20  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -27,25 +27,16 @@ css = [
     Style('body { font-family: Arial, sans-serif; }'),
     Style('.container { display: flex; flex-direction: column; height: 100vh; }'),
     Style('.main { display: flex; flex: 1; flex-direction: row; }'),
-    Style(
-        '.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; text-align: center; overflow: hidden;}'),
+    Style('.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; text-align: center; overflow: hidden;}'),
     Style('.item { display: inline-block; }'),
     Style('.left { float: left; }'),
     Style('.right { float: right }'),
-    Style(
-        '.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; }'),
+    Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; }'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
-    Style(
-        '@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
+    Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
     Style('.primary:active { background-color: #0056b3; }')
 ]
 countdown = QUESTION_COUNTDOWN_SEC
-# task = None
-
-
-def reset():
-    global countdown
-    countdown = QUESTION_COUNTDOWN_SEC
 
 
 @dataclass
@@ -92,6 +83,10 @@ class TaskManager:
         self.clients = set()  # Track connected WebSocket clients
         self.clients_lock = threading.Lock()
         self.task = None
+        self.countdown_var = None
+
+    def reset(self):
+        self.countdown_var = QUESTION_COUNTDOWN_SEC
 
     async def run_executor(self, executor_id: int):
         while True:
@@ -136,6 +131,9 @@ class TaskManager:
                 await asyncio.create_task(self.remove_failed_topic(topic))
             # logging.debug(f"Topic updated: {topic.topic} to {topic.status}")
         if should_consume:
+            if self.task:
+                self.task.cancel()
+            self.reset()
             self.task = asyncio.create_task(self.count())
             await self.consume_successful_topic()
 
@@ -192,7 +190,7 @@ class TaskManager:
         if should_consume:
             if self.task:
                 self.task.cancel()
-                reset()
+                self.reset()
             self.task = asyncio.create_task(self.count())
             async with self.past_topics_lock:
                 self.past_topics.append(current_topic)
@@ -326,7 +324,6 @@ class TaskManager:
 
 
 async def app_startup():
-    global task
     num_executors = 2  # Change this to run more executors
     task_manager = TaskManager(num_executors)
     app.state.task_manager = task_manager
