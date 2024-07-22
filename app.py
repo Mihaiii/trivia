@@ -12,7 +12,7 @@ from typing import List
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 20  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -111,6 +111,7 @@ class TaskManager:
 
     async def update_status(self, topic: Topic):
         global current_topic
+        global task
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
@@ -135,6 +136,7 @@ class TaskManager:
                 await asyncio.create_task(self.remove_failed_topic(topic))
             # logging.debug(f"Topic updated: {topic.topic} to {topic.status}")
         if should_consume:
+            task = asyncio.create_task(self.count())
             await self.consume_successful_topic()
 
     async def consume_successful_topic(self):
@@ -332,7 +334,6 @@ async def app_startup():
     asyncio.create_task(task_manager.monitor_topics())
     for i in range(num_executors):
         asyncio.create_task(task_manager.run_executor(i))
-    task = asyncio.create_task(task_manager.count())
 
 
 app = FastHTML(hdrs=(css), ws_hdr=True, on_startup=[app_startup], debug=True)
