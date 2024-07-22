@@ -12,7 +12,7 @@ from typing import List
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 20  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -302,17 +302,16 @@ class TaskManager:
                     logging.debug(f"Removed disconnected client: {client}")
 
     async def count(self):
-        global countdown
-        countdown = QUESTION_COUNTDOWN_SEC
+        self.countdown_var = QUESTION_COUNTDOWN_SEC
         # await self.consume_successful_topic()
-        while countdown >= 0:
+        while self.countdown_var >= 0:
             await self.broadcast_countdown()
             await asyncio.sleep(1)
-            countdown -= 1
+            self.countdown_var -= 1
 
     async def broadcast_countdown(self, client=None):
-        global countdown
-        countdown_div = Div(f"COUNTDOWN: {countdown}s", cls="countdown")
+        countdown_format = self.countdown_var if self.countdown_var >= 10 else f"0{self.countdown_var}"
+        countdown_div = Div(f"{countdown_format}", cls="countdown", style="text-align: center;")
         with self.clients_lock:
             clients = self.clients if client is None else [client]
             for client in clients.copy():
