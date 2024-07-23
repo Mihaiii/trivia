@@ -19,7 +19,6 @@ MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T 
 NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
 
-current_topic = None
 
 css = [
     picolink,
@@ -36,7 +35,6 @@ css = [
     Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
     Style('.primary:active { background-color: #0056b3; }')
 ]
-countdown = QUESTION_COUNTDOWN_SEC
 
 
 @dataclass
@@ -84,6 +82,7 @@ class TaskManager:
         self.clients_lock = threading.Lock()
         self.task = None
         self.countdown_var = None
+        self.current_topic = None
 
     def reset(self):
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -106,7 +105,6 @@ class TaskManager:
             await asyncio.sleep(0.1)  # Avoid busy-waiting
 
     async def update_status(self, topic: Topic):
-        global current_topic
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
@@ -125,7 +123,7 @@ class TaskManager:
 
             await self.broadcast_next_topics()
 
-            if topic.status == "successful" and current_topic is None:
+            if topic.status == "successful" and self.current_topic is None:
                 should_consume = True
             if topic.status == "failed":
                 await asyncio.create_task(self.remove_failed_topic(topic))
@@ -138,7 +136,6 @@ class TaskManager:
             await self.consume_successful_topic()
 
     async def consume_successful_topic(self):
-        global current_topic
         topic = None
         logging.debug(f"consume_successful_topic before lock")
         async with self.topics_lock:
@@ -149,7 +146,7 @@ class TaskManager:
                 topic = successful_topics[0]  # Get the highest points successful topic
                 logging.debug(f"Topic obtained: {topic.topic}")
                 self.topics.remove(topic)
-                current_topic = topic
+                self.current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 self.current_timeout_task = asyncio.create_task(self.topic_timeout())
                 async with self.users_lock:
@@ -173,7 +170,6 @@ class TaskManager:
             pass  # Handle cancellation if the task is cancelled
 
     async def check_topic_completion(self):
-        global current_topic
         should_consume = False
         async with self.users_lock:
             all_users_chosen = all(self.users.values())
@@ -183,9 +179,8 @@ class TaskManager:
             current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if current_topic and (
-                    current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
-                logging.debug(f"Completing topic: {current_topic.topic}")
+            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
+                logging.debug(f"Completing topic: {self.current_topic.topic}")
                 should_consume = True
         if should_consume:
             if self.task:
@@ -193,7 +188,7 @@ class TaskManager:
                 self.reset()
             self.task = asyncio.create_task(self.count())
             async with self.past_topics_lock:
-                self.past_topics.append(current_topic)
+                self.past_topics.append(self.current_topic)
             await self.consume_successful_topic()
 
     async def remove_failed_topic(self, topic: Topic):
@@ -256,7 +251,6 @@ class TaskManager:
         # logging.debug("Broadcasting top topics")
 
     async def broadcast_past_topics(self, client=None):
-        global current_topic
         async with self.past_topics_lock:
             past_topics = list(self.past_topics)[::-1]
         past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in
@@ -274,18 +268,18 @@ class TaskManager:
     async def broadcast_current_question(self, client=None):
         current_question_info = Div(
             Div(
-                Div(current_topic.question.title, style="font-size: 30px;"),
-                Div(current_topic.user, cls="item left"),
-                Div(f"{current_topic.points} pts", cls="item right"),
+                Div(self.current_topic.question.title, style="font-size: 30px;"),
+                Div(self.current_topic.user, cls="item left"),
+                Div(f"{self.current_topic.points} pts", cls="item right"),
                 cls="card"),
             Div(
-                Button(current_topic.question.option_A, cls="primary", hx_post="/choose_option_A",
+                Button(self.current_topic.question.option_A, cls="primary", hx_post="/choose_option_A",
                        hx_target="#question_options", hx_swap="outerHTML"),
-                Button(current_topic.question.option_B, cls="primary", hx_post="/choose_option_B",
+                Button(self.current_topic.question.option_B, cls="primary", hx_post="/choose_option_B",
                        hx_target="#question_options", hx_swap="outerHTML"),
-                Button(current_topic.question.option_C, cls="primary", hx_post="/choose_option_C",
+                Button(self.current_topic.question.option_C, cls="primary", hx_post="/choose_option_C",
                        hx_target="#question_options", hx_swap="outerHTML"),
-                Button(current_topic.question.option_D, cls="primary", hx_post="/choose_option_D",
+                Button(self.current_topic.question.option_D, cls="primary", hx_post="/choose_option_D",
                        hx_target="#question_options", hx_swap="outerHTML"),
                 cls="options",
                 style="display: flex; flex-direction: column; gap: 10px; ",
@@ -336,17 +330,17 @@ rt = app.route
 
 
 @rt('/choose_option_A')
-async def post(request):
-    global current_topic
+async def post(app):
+    task_manager = app.state.task_manager
     # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
     return Div(
-        Button(current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -355,17 +349,17 @@ async def post(request):
 
 
 @rt('/choose_option_B')
-async def post(request):
-    global current_topic
+async def post(app):
+    task_manager = app.state.task_manager
     # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
     return Div(
-        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="primarly", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="primarly", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -374,17 +368,17 @@ async def post(request):
 
 
 @rt('/choose_option_C')
-async def post(request):
-    global current_topic
+async def post(app):
+    task_manager = app.state.task_manager
     # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
     return Div(
-        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="primarly", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="primarly", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -393,17 +387,17 @@ async def post(request):
 
 
 @rt('/choose_option_D')
-async def post(request):
-    global current_topic
+async def post(app):
+    task_manager = app.state.task_manager
     # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
     return Div(
-        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="primarly", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="primarly", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -471,7 +465,6 @@ async def post(topic: str, points: int):
 
 
 async def on_connect(send, ws):
-    global current_topic
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         task_manager.clients.add(send)
@@ -483,7 +476,7 @@ async def on_connect(send, ws):
     ws.scope['user_id'] = user_id
     ws.scope['task_manager'] = task_manager
     await task_manager.broadcast_next_topics(send)
-    if current_topic:
+    if task_manager.current_topic:
         await task_manager.broadcast_current_question(send)
     await task_manager.broadcast_past_topics(send)
 
