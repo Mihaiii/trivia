@@ -447,6 +447,13 @@ def unselectedOptions():
         id="question_options"
     )
 
+def bid_form():
+    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
+                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
+                 Button('BID', cls='primary'),
+                 action='/', hx_post='/bid'), hx_swap="outerHTML"
+            )
+
 @rt("/auth/callback")
 def get(app, session, code: str = None):
     try:
@@ -467,11 +474,10 @@ def get(app, session, code: str = None):
         #TODO: save in DB instead
         task_manager.user_points[user_id] = 20
     logging.info(f"Client connected: {user_id}")
-    #ws.scope['user_id'] = user_id
     return RedirectResponse(url="/")
 
 @rt('/')
-async def get(session, app):
+async def get(session, app, request):
     task_manager = app.state.task_manager
     global countdown
     tabs = Nav(
@@ -485,11 +491,7 @@ async def get(session, app):
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
         Div(id="next_topics"),
-        Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
-                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
-                 Button('BID', cls='primary'),
-                 action='/', hx_post='/bid'), hx_swap="outerHTML"
-            )
+        bid_form()
         , cls='side-panel'
     )
     middle_panel = Div(
@@ -497,13 +499,13 @@ async def get(session, app):
         current_question_info,
         cls="middle-panel"
     )
-    #if 'session_id' not in session:
-    top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
-    #else:
-    #    user_id = session['session_id']
-        #TODO: get from DB instead - this is how it should be and besides, at refresh (why, though? We shouldn't based on on_disconnect),
-        #we still get session_id, but we don't have task_manager.user_points[user_id]
-    #    top_right_corner = Div(user_id + ": " + task_manager.user_points[user_id])
+    try:
+        user_id = session['session_id']
+        top_right_corner = Div(user_id)
+        #top_right_corner = Div(user_id + ": " + task_manager.user_points[user_id])
+    except:
+        top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
+
     right_panel = Div(
         top_right_corner,
         Div(id="past_topics"),
@@ -525,15 +527,14 @@ async def get(session, app):
 
 
 @rt("/bid")
-async def post(topic: str, points: int):
+async def post(session, topic: str, points: int):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return bid_form()
     print(f"Topic: {topic}, points: {points}")
     task_manager = app.state.task_manager
     await task_manager.add_user_topic(topic=topic, points=points)
-    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
-                    Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
-                    Button('BID', cls='primary'),
-                    action='/', hx_post='/bid'), hx_swap="outerHTML"
-               )
+    return bid_form()
 
 
 async def on_connect(send):
