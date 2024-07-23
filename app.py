@@ -421,8 +421,8 @@ async def get(request):
         Div(id="next_topics"),
         Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
-                 Button('BID', cls='primary'),
-                 action='/', hx_post='/bid'), hx_swap="outerHTML"
+                 Button('BID', cls='primary', style="width: 100%;"),
+                 action='/', hx_post='/bid'), hx_swap="outerHTML", style="border: 5px solid black; padding: 10px;"
             )
         , cls='side-panel'
     )
