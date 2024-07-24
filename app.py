@@ -37,10 +37,13 @@ css = [
     Style('.item { display: inline-block; }'),
     Style('.left { float: left; }'),
     Style('.right { float: right }'),
-    Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; }'),
-    Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; }'),
-    Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
-    Style('.primary:active { background-color: #0056b3; }')
+    Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 20%;}'),
+    Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 60%;}'),
+    Style('.login { margin-bottom: 10px; }'),
+    # Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
+    Style('.primary:active { background-color: #0056b3; }'),
+    Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
+    Style('@media (min-width: 769px) { .login_wrapper { display: none; }')
 ]
 #TODO: remove the app before making the repo public and properly handle the info, ofc
 huggingface_client = HuggingFaceClient(
@@ -269,8 +272,6 @@ class TaskManager:
             past_topic.question.title = "example question?"
             past_topic.question.answer = "example answer"
 
-            # past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in
-                                # past_topics]
             past_topics_html = Div(Div(f"{past_topic.topic} - {past_topic.user}", style="text-align: center;"),
                                    Div(f"Q: {past_topic.question.title}"),
                                    Div(f"A: {past_topic.question.answer}"),
@@ -489,19 +490,17 @@ async def get(session, app, request):
         bid_form()
         , cls='side-panel'
     )
+    if user_id:
+        top_right_corner = Div(user_id + ": " + str(current_points) + " pct", cls='login', style="max-width: fit-content; margin-left: auto; margin-right: auto;")
+    else:
+        top_right_corner = Div(A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state()), cls='login', style="max-width: fit-content; margin-left: auto; margin-right: auto;")
+
     middle_panel = Div(
+        Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
         cls="middle-panel"
     )
-    if user_id:
-        top_right_corner = Div(user_id + ": " + str(current_points) + " pct")
-    else:
-        top_right_corner = A(
-            Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"),
-            href=huggingface_client.login_link_with_state()
-            )    
-
     right_panel = Div(
         top_right_corner,
         Div(id="past_topics"),
