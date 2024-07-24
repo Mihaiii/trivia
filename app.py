@@ -83,11 +83,9 @@ class TaskManager:
         self.topics_lock = asyncio.Lock()
         self.past_topics = deque(maxlen=5)
         self.past_topics_lock = asyncio.Lock()
-        self.users_lock = asyncio.Lock()
         self.executors = [concurrent.futures.ThreadPoolExecutor(max_workers=1) for _ in range(num_executors)]
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
-        self.users = {}  # Track if users have chosen an option
         self.current_timeout_task = None
         self.clients = {"unassigned_clients": set()}  # Track connected WebSocket clients
         self.clients_lock = threading.Lock()
@@ -160,8 +158,7 @@ class TaskManager:
                 self.current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 self.current_timeout_task = asyncio.create_task(self.topic_timeout())
-                async with self.users_lock:
-                    self.users = {user: False for user in self.users.keys()}  # Reset user choices
+                
         if topic:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
             await self.broadcast_current_question()
@@ -182,15 +179,13 @@ class TaskManager:
 
     async def check_topic_completion(self):
         should_consume = False
-        async with self.users_lock:
-            all_users_chosen = all(self.users.values())
         logging.debug("check_topic_completion before self.topics_lock")
         async with self.topics_lock:
             logging.debug("check_topic_completion after self.topics_lock")
             current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
+            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4):
                 logging.debug(f"Completing topic: {self.current_topic.topic}")
                 should_consume = True
         if should_consume:
@@ -328,7 +323,6 @@ async def post(session, app):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
     div_a = Div(
         Button(task_manager.current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
@@ -355,7 +349,6 @@ async def post(session):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
     div_b = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
@@ -382,7 +375,6 @@ async def post(session, app):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
     div_c =  Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
@@ -409,7 +401,6 @@ async def post(session):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
     
     div_d = Div(
@@ -475,8 +466,6 @@ async def get(session, app, request):
         user_id = session['session_id']
         if user_id not in task_manager.clients:
             task_manager.clients[user_id] = set()
-    
-        task_manager.users[user_id] = False
         
         db_player = db.q(f"select * from {players} where {players.c.name} like '{user_id}' limit 1")
 
@@ -546,8 +535,6 @@ async def post(session, topic: str, points: int):
 
 
 async def on_connect(send, ws):
-    print(ws.scope)
-    print(ws.headers)
     client_key = "unassigned_clients"
     if ws.scope['session'] and ws.scope['session']['session_id']:
         client_key = ws.scope['session']['session_id']
