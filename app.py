@@ -477,9 +477,9 @@ async def get(session, app, request):
         
 
     tabs = Nav(
-        A("PLAY", href="#", role="button", cls="secondary"),
-        A("LEADERBOARD", href="#", role="button", cls="secondary"),
-        A("FAQ", href="#", role="button", cls="secondary"),
+        A("PLAY", href="/", role="button", cls="secondary"),
+        A("LEADERBOARD", href="/leaderboard", role="button", cls="secondary"),
+        A("FAQ", href="/faq", role="button", cls="secondary"),
         cls="tabs"
     )
 
@@ -521,6 +521,18 @@ async def get(session, app, request):
     )
     return container
 
+@rt('/leaderboard')
+async def get(session, app, request):
+    db_player = db.q(f"select * from {players} order by points desc limit 20")
+    cells = []
+    print(db_player)
+    for row in db_player:
+        cells.append(Tr(Td(row['name']), Td(row['points'])))
+    return Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells)
+
+@rt('/faq')
+async def get(session, app, request):
+    return Div("not yet implemented")
 
 @rt("/bid")
 async def post(session, topic: str, points: int):
