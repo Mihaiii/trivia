@@ -20,6 +20,11 @@ MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T 
 NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
 
+db = database('uplayers.db')
+players = db.t.players
+if players not in db.t:
+    players.create(id=int, name=str, points=int, pk='id')
+
 current_topic = None
 
 css = [
@@ -84,9 +89,8 @@ class TaskManager:
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
         self.users = {}  # Track if users have chosen an option
-        self.user_points = {}  # Track user points
         self.current_timeout_task = None
-        self.clients = set()  # Track connected WebSocket clients
+        self.clients = {"unassigned_clients": set()}  # Track connected WebSocket clients
         self.clients_lock = threading.Lock()
         self.task = None
         self.countdown_var = None
@@ -249,33 +253,29 @@ class TaskManager:
                                 Div(item.user, cls="item left"), Div(f"{item.points} pts", cls="item right"),
                                 cls="card", style=f"background-color: {status_dict[item.status]}") for item in
                             next_topics]
-        with self.clients_lock:
-            print("self.clients len")
-            print(len(self.clients))
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(*next_topics_html, id="next_topics"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
-        # logging.debug("Broadcasting top topics")
+        
+        await self.send_to_clients(Div(*next_topics_html, id="next_topics"), client)
 
+    async def send_to_clients(self, element, client=None):
+        with self.clients_lock:
+            clients = (self.clients if client is None else [client]).copy()
+        for client in [client_key for client_key in clients]:
+            try:
+                await client(element)
+            except:
+                for key, client_set in self.clients.items():
+                    if client in client_set:
+                        client_set.remove(client)
+                        logging.debug(f"Removed disconnected client: {client}")
+                        break
+                
     async def broadcast_past_topics(self, client=None):
         global current_topic
         async with self.past_topics_lock:
             past_topics = list(self.past_topics)[::-1]
         past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in
                             past_topics]
-        with self.clients_lock:
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(*past_topics_html, id="past_topics"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
-            # logging.debug("Broadcasting past topics")
+        await self.send_to_clients(Div(*past_topics_html, id="past_topics"), client)
 
     async def broadcast_current_question(self, client=None):
         current_question_info = Div(
@@ -286,14 +286,7 @@ class TaskManager:
                 cls="card"),
             unselectedOptions()
         )
-        with self.clients_lock:
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(current_question_info, id="current_question_info"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
+        await self.send_to_clients(Div(current_question_info, id="current_question_info"), client)
 
     async def count(self):
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -306,15 +299,7 @@ class TaskManager:
     async def broadcast_countdown(self, client=None):
         countdown_format = self.countdown_var if self.countdown_var >= 10 else f"0{self.countdown_var}"
         countdown_div = Div(f"{countdown_format}", cls="countdown", style="text-align: center;")
-        with self.clients_lock:
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(countdown_div, id="countdown"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
-
+        await self.send_to_clients(Div(countdown_div, id="countdown"), client)
 
 async def app_startup():
     num_executors = 2  # Change this to run more executors
@@ -330,7 +315,7 @@ rt = app.route
 setup_toasts(app)
 
 @rt('/choose_option_A')
-async def post(session):
+async def post(session, app):
     if('session_id' not in session):
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
         return unselectedOptions()
@@ -462,23 +447,41 @@ def get(app, session, code: str = None):
         error_message = str(e)
         print(f"Error occurred: {error_message}")
         return f"An error occurred: {error_message}"
-    user_id = user_info.get("preferred_username")
-    task_manager = app.state.task_manager
-    if(user_id in task_manager.users):
-        return Response(status_code=401, content="A user can be logged in on only one page. If you want to log in here, please log out from the other page.")
-    
+    user_id = user_info.get("preferred_username")    
     if 'session_id' not in session:
         session['session_id'] = user_id
-    task_manager.users[user_id] = False
-    if user_id not in task_manager.user_points:
-        #TODO: save in DB instead
-        task_manager.user_points[user_id] = 20
+
     logging.info(f"Client connected: {user_id}")
     return RedirectResponse(url="/")
 
 @rt('/')
 async def get(session, app, request):
     task_manager = app.state.task_manager
+    user_id = None
+    if 'session_id' in session:
+        user_id = session['session_id']
+        if user_id not in task_manager.clients:
+            task_manager.clients[user_id] = set()
+        
+        #TODO
+        #client = request.cookies['session_']
+        #if client in task_manager.clients["unassigned_clients"]
+            #task_manager.clients["unassigned_clients"].remove(client)
+        #if client not in task_manager.clients[user_id]:
+            #task_manager.clients[user_id].add(client)
+    
+        task_manager.users[user_id] = False
+        
+        db_player = db.q(f"select * from {players} where {players.c.name} like 'dsadsa' limit 1")
+
+        if not db_player:
+            current_points = 20
+            players.insert({'name': user_id, 'points': current_points})
+        else:
+            current_points = db_player[0]['points']
+        
+        
+        
     global countdown
     tabs = Nav(
         A("PLAY", href="#", role="button", cls="secondary"),
@@ -499,11 +502,9 @@ async def get(session, app, request):
         current_question_info,
         cls="middle-panel"
     )
-    try:
-        user_id = session['session_id']
-        top_right_corner = Div(user_id)
-        #top_right_corner = Div(user_id + ": " + task_manager.user_points[user_id])
-    except:
+    if user_id:
+        top_right_corner = Div(user_id + ": " + str(current_points))
+    else:
         top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
 
     right_panel = Div(
@@ -541,7 +542,7 @@ async def on_connect(send):
     global current_topic
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
-        task_manager.clients.add(send)
+        task_manager.clients["unassigned_clients"].add(send)
     await task_manager.broadcast_next_topics(send)
     if current_topic:
         await task_manager.broadcast_current_question(send)
@@ -555,9 +556,12 @@ async def on_disconnect(send, session):
     with task_manager.clients_lock:
         print("I'm inside the lock")
         if send in task_manager.clients.copy():
-            task_manager.clients.remove(send)
-            #I should probably somehow do this at the other places where we have clients.remove
-            session['session_id'] = None
+            for key, client_set in task_manager.clients.items():
+                if send in client_set:
+                    client_set.remove(send)
+                    break
+            if session:
+                session['session_id'] = None
             print("Client was removed and printing len clients")
             print(len(task_manager.clients))
 

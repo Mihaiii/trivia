@@ -8,7 +8,7 @@ class HuggingFaceClient(_AppClient):
     base_url = "https://huggingface.co/oauth/authorize"
     token_url = "https://huggingface.co/oauth/token"
     info_url = "https://huggingface.co/oauth/userinfo"
-    id_key = 'id'
+    id_key = 'sub'
     
     def __init__(self, client_id, client_secret, redirect_uri=None, redirect_uris=None, code=None, scope=None, state=None, **kwargs):
         if redirect_uris and not redirect_uri: redirect_uri = redirect_uris[0]
