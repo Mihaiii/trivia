@@ -12,7 +12,7 @@ from typing import List
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 20  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -251,18 +251,29 @@ class TaskManager:
         # logging.debug("Broadcasting top topics")
 
     async def broadcast_past_topics(self, client=None):
-        async with self.past_topics_lock:
-            past_topics = list(self.past_topics)[::-1]
-        past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in
-                            past_topics]
-        with self.clients_lock:
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(*past_topics_html, id="past_topics"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
+        if len(list(self.past_topics)) > 0:
+            async with self.past_topics_lock:
+                past_topic = list(self.past_topics)[-1]
+            random_numbers = random.sample(range(1, 11), 10)
+            past_topic.winners = [f"user{num}" for num in random_numbers]
+            past_topic.question.title = "example question?"
+            past_topic.question.answer = "example answer"
+
+            # past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in
+                                # past_topics]
+            past_topics_html = Div(Div(f"{past_topic.topic} - {past_topic.user}", style="text-align: center;"),
+                                   Div(f"Q: {past_topic.question.title}"),
+                                   Div(f"A: {past_topic.question.answer}"),
+                                   Div(f"Winners: ", Ol(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
+                                   cls="card")
+            with self.clients_lock:
+                clients = self.clients if client is None else [client]
+                for client in clients.copy():
+                    try:
+                        await client(Div(past_topics_html, id="past_topics"))
+                    except:
+                        self.clients.remove(client)
+                        logging.debug(f"Removed disconnected client: {client}")
             # logging.debug("Broadcasting past topics")
 
     async def broadcast_current_question(self, client=None):
@@ -305,7 +316,7 @@ class TaskManager:
 
     async def broadcast_countdown(self, client=None):
         countdown_format = self.countdown_var if self.countdown_var >= 10 else f"0{self.countdown_var}"
-        countdown_div = Div(f"{countdown_format}", cls="countdown", style="text-align: center;")
+        countdown_div = Div(f"{countdown_format}s", cls="countdown", style="text-align: center; font-size: 40px;")
         with self.clients_lock:
             clients = self.clients if client is None else [client]
             for client in clients.copy():
