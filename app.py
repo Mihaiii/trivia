@@ -459,6 +459,13 @@ def get(app, session, code: str = None):
     logging.info(f"Client connected: {user_id}")
     return RedirectResponse(url="/")
 
+tabs = Nav(
+    A("PLAY", href="/", role="button", cls="secondary"),
+    A("LEADERBOARD", href="/leaderboard", role="button", cls="secondary"),
+    A("FAQ", href="/faq", role="button", cls="secondary"),
+    cls="tabs"
+)
+    
 @rt('/')
 async def get(session, app, request):
     task_manager = app.state.task_manager
@@ -475,14 +482,6 @@ async def get(session, app, request):
             players.insert({'name': user_id, 'points': current_points})
         else:
             current_points = db_player[0]['points']
-        
-
-    tabs = Nav(
-        A("PLAY", href="/", role="button", cls="secondary"),
-        A("LEADERBOARD", href="/leaderboard", role="button", cls="secondary"),
-        A("FAQ", href="/faq", role="button", cls="secondary"),
-        cls="tabs"
-    )
 
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
@@ -527,11 +526,20 @@ async def get(session, app, request):
     print(db_player)
     for row in db_player:
         cells.append(Tr(Td(row['name']), Td(row['points'])))
-    return Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells)
+    main_content = Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells)
+    return Div(
+        tabs,
+        main_content,
+        cls="container"
+    )
 
 @rt('/faq')
 async def get(session, app, request):
-    return Div("not yet implemented")
+    return Div(
+        tabs,
+        Div("not yet implemented"),
+        cls="container"
+    )
 
 @rt("/bid")
 async def post(session, topic: str, points: int):
