@@ -9,6 +9,7 @@ import logging
 import random
 import threading
 from typing import List
+from auth import HuggingFaceClient
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -19,6 +20,12 @@ MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T 
 NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
 
+db = database('uplayers.db')
+players = db.t.players
+if players not in db.t:
+    players.create(id=int, name=str, points=int, pk='id')
+
+current_topic = None
 
 css = [
     picolink,
@@ -35,7 +42,12 @@ css = [
     Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
     Style('.primary:active { background-color: #0056b3; }')
 ]
-
+#TODO: remove the app before making the repo public and properly handle the info, ofc
+huggingface_client = HuggingFaceClient(
+    client_id="f7542bbf-4343-482d-8b58-9343f4f9e3ca",
+    client_secret="04f5de00-4158-44e2-a794-443f71586ee1",
+    redirect_uri="http://localhost:8000/auth/callback"
+)
 
 @dataclass
 class Question:
@@ -76,12 +88,11 @@ class TaskManager:
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
         self.users = {}  # Track if users have chosen an option
-        self.user_points = {}  # Track user points
         self.current_timeout_task = None
-        self.clients = set()  # Track connected WebSocket clients
+        self.clients = {"unassigned_clients": set()}  # Track connected WebSocket clients
         self.clients_lock = threading.Lock()
         self.task = None
-        self.countdown_var = None
+        self.countdown_var = QUESTION_COUNTDOWN_SEC
         self.current_topic = None
 
     def reset(self):
@@ -238,18 +249,22 @@ class TaskManager:
                                 Div(item.user, cls="item left"), Div(f"{item.points} pts", cls="item right"),
                                 cls="card", style=f"background-color: {status_dict[item.status]}") for item in
                             next_topics]
-        with self.clients_lock:
-            print("self.clients len")
-            print(len(self.clients))
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(*next_topics_html, id="next_topics"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
-        # logging.debug("Broadcasting top topics")
+        
+        await self.send_to_clients(Div(*next_topics_html, id="next_topics"), client)
 
+    async def send_to_clients(self, element, client=None):
+        with self.clients_lock:
+            clients = (self.clients if client is None else {'dd': [client]}).copy()
+        for client in [item for subset in clients.values() for item in subset]:
+            try:
+                await client(element)
+            except:
+                for key, client_set in self.clients.items():
+                    if client in client_set:
+                        client_set.remove(client)
+                        logging.debug(f"Removed disconnected client: {client}")
+                        break
+                
     async def broadcast_past_topics(self, client=None):
         if len(list(self.past_topics)) > 0:
             async with self.past_topics_lock:
@@ -266,15 +281,7 @@ class TaskManager:
                                    Div(f"A: {past_topic.question.answer}"),
                                    Div(f"Winners: ", Ol(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
                                    cls="card")
-            with self.clients_lock:
-                clients = self.clients if client is None else [client]
-                for client in clients.copy():
-                    try:
-                        await client(Div(past_topics_html, id="past_topics"))
-                    except:
-                        self.clients.remove(client)
-                        logging.debug(f"Removed disconnected client: {client}")
-            # logging.debug("Broadcasting past topics")
+            await self.send_to_clients(Div(past_topics_html, id="past_topics"), client)
 
     async def broadcast_current_question(self, client=None):
         current_question_info = Div(
@@ -283,28 +290,9 @@ class TaskManager:
                 Div(self.current_topic.user, cls="item left"),
                 Div(f"{self.current_topic.points} pts", cls="item right"),
                 cls="card"),
-            Div(
-                Button(self.current_topic.question.option_A, cls="primary", hx_post="/choose_option_A",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                Button(self.current_topic.question.option_B, cls="primary", hx_post="/choose_option_B",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                Button(self.current_topic.question.option_C, cls="primary", hx_post="/choose_option_C",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                Button(self.current_topic.question.option_D, cls="primary", hx_post="/choose_option_D",
-                       hx_target="#question_options", hx_swap="outerHTML"),
-                cls="options",
-                style="display: flex; flex-direction: column; gap: 10px; ",
-                id="question_options"
-            )
+            unselectedOptions()
         )
-        with self.clients_lock:
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(current_question_info, id="current_question_info"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
+        await self.send_to_clients(Div(current_question_info, id="current_question_info"), client)
 
     async def count(self):
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -316,15 +304,8 @@ class TaskManager:
 
     async def broadcast_countdown(self, client=None):
         countdown_format = self.countdown_var if self.countdown_var >= 10 else f"0{self.countdown_var}"
-        countdown_div = Div(f"{countdown_format}s", cls="countdown", style="text-align: center; font-size: 40px;")
-        with self.clients_lock:
-            clients = self.clients if client is None else [client]
-            for client in clients.copy():
-                try:
-                    await client(Div(countdown_div, id="countdown"))
-                except:
-                    self.clients.remove(client)
-                    logging.debug(f"Removed disconnected client: {client}")
+        countdown_div = Div(f"{countdown_format}s", cls="countdown", style="text-align: center; font-size: 40px;", id="countdown")
+        await self.send_to_clients(countdown_div, client)
 
 
 async def app_startup():
@@ -338,12 +319,18 @@ async def app_startup():
 
 app = FastHTML(hdrs=(css), ws_hdr=True, on_startup=[app_startup], debug=True)
 rt = app.route
-
+setup_toasts(app)
 
 @rt('/choose_option_A')
-async def post(app):
+async def post(session, app):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
     task_manager = app.state.task_manager
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
+    # TODO: save the user's choice based on the login data in the database
     return Div(
         Button(task_manager.current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -360,9 +347,15 @@ async def post(app):
 
 
 @rt('/choose_option_B')
-async def post(app):
+async def post(session):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
     task_manager = app.state.task_manager
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
+    # TODO: save the user's choice based on the login data in the database
     return Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -379,9 +372,14 @@ async def post(app):
 
 
 @rt('/choose_option_C')
-async def post(app):
+async def post(session, app):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
     task_manager = app.state.task_manager
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
     return Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -398,9 +396,14 @@ async def post(app):
 
 
 @rt('/choose_option_D')
-async def post(app):
+async def post(session):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return unselectedOptions()
+    
     task_manager = app.state.task_manager
-    # TODO: save the user's choice based on the login data - this will be implemented after auth is implemented
+    task_manager.users[session['session_id']] = True
+    await task_manager.check_topic_completion()
     return Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -415,10 +418,71 @@ async def post(app):
         id="question_options"
     )
 
+def unselectedOptions():
+    task_manager = app.state.task_manager
+    return Div(
+        Button(task_manager.current_topic.question.option_A, cls="primary", hx_post="/choose_option_A",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        Button(task_manager.current_topic.question.option_B, cls="primary", hx_post="/choose_option_B",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        Button(task_manager.current_topic.question.option_C, cls="primary", hx_post="/choose_option_C",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        Button(task_manager.current_topic.question.option_D, cls="primary", hx_post="/choose_option_D",
+                hx_target="#question_options", hx_swap="outerHTML"),
+        cls="options",
+        style="display: flex; flex-direction: column; gap: 10px; ",
+        id="question_options"
+    )
+
+def bid_form():
+    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
+                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
+                 Button('BID', cls='primary', style="width: 100%;"),
+                 action='/', hx_post='/bid'), hx_swap="outerHTML", style="border: 5px solid black; padding: 10px;"
+            )
+
+@rt("/auth/callback")
+def get(app, session, code: str = None):
+    try:
+        user_info = huggingface_client.retr_info(code)
+    except Exception as e:
+        error_message = str(e)
+        print(f"Error occurred: {error_message}")
+        return f"An error occurred: {error_message}"
+    user_id = user_info.get("preferred_username")    
+    if 'session_id' not in session:
+        session['session_id'] = user_id
+
+    logging.info(f"Client connected: {user_id}")
+    return RedirectResponse(url="/")
 
 @rt('/')
-async def get(request):
-    global countdown
+async def get(session, app, request):
+    task_manager = app.state.task_manager
+    user_id = None
+    if 'session_id' in session:
+        user_id = session['session_id']
+        if user_id not in task_manager.clients:
+            task_manager.clients[user_id] = set()
+        
+        #TODO
+        #client = request.cookies['session_']
+        #if client in task_manager.clients["unassigned_clients"]
+            #task_manager.clients["unassigned_clients"].remove(client)
+        #if client not in task_manager.clients[user_id]:
+            #task_manager.clients[user_id].add(client)
+    
+        task_manager.users[user_id] = False
+        
+        db_player = db.q(f"select * from {players} where {players.c.name} like '{user_id}' limit 1")
+
+        if not db_player:
+            current_points = 20
+            players.insert({'name': user_id, 'points': current_points})
+        else:
+            current_points = db_player[0]['points']
+        
+
     tabs = Nav(
         A("PLAY", href="#", role="button", cls="secondary"),
         A("LEADERBOARD", href="#", role="button", cls="secondary"),
@@ -426,25 +490,24 @@ async def get(request):
         cls="tabs"
     )
 
-    countdown_div = Div(id="countdown")
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
         Div(id="next_topics"),
-        Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
-                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
-                 Button('BID', cls='primary', style="width: 100%;"),
-                 action='/', hx_post='/bid'), hx_swap="outerHTML", style="border: 5px solid black; padding: 10px;"
-            )
+        bid_form()
         , cls='side-panel'
     )
     middle_panel = Div(
-        countdown_div,
+        Div(id="countdown"),
         current_question_info,
         cls="middle-panel"
     )
+    if user_id:
+        top_right_corner = Div(user_id + ": " + str(current_points) + " pct")
+    else:
+        top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
 
     right_panel = Div(
-        Button("Login / nr of points", cls="primary"),
+        top_right_corner,
         Div(id="past_topics"),
         cls="side-panel"
     )
@@ -464,45 +527,42 @@ async def get(request):
 
 
 @rt("/bid")
-async def post(topic: str, points: int):
+async def post(session, topic: str, points: int):
+    if('session_id' not in session):
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        return bid_form()
     print(f"Topic: {topic}, points: {points}")
+    #TODO: subtract the points of the user and do the check it can bid (has end result >=0 points)
     task_manager = app.state.task_manager
     await task_manager.add_user_topic(topic=topic, points=points)
-    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
-                    Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
-                    Button('BID', cls='primary'),
-                    action='/', hx_post='/bid'), hx_swap="outerHTML"
-               )
+    return bid_form()
 
 
 async def on_connect(send, ws):
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
-        task_manager.clients.add(send)
-    user_id = f"user_{random.randint(1000, 9999)}"  # Simulated user identification
-    task_manager.users[user_id] = False
-    if user_id not in task_manager.user_points:
-        task_manager.user_points[user_id] = 20  # Initialize user with 20 points
-    logging.info(f"Client connected: {user_id}")
-    ws.scope['user_id'] = user_id
-    ws.scope['task_manager'] = task_manager
+        task_manager.clients["unassigned_clients"].add(send)
     await task_manager.broadcast_next_topics(send)
     if task_manager.current_topic:
         await task_manager.broadcast_current_question(send)
     await task_manager.broadcast_past_topics(send)
 
 
-async def on_disconnect(send, ws):
+async def on_disconnect(send, session):
     print("Calling on_disconnect")
     print(len(app.state.task_manager.clients))
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         print("I'm inside the lock")
         if send in task_manager.clients.copy():
-            task_manager.clients.remove(send)
+            for key, client_set in task_manager.clients.items():
+                if send in client_set:
+                    client_set.remove(send)
+                    break
+            if session:
+                session['session_id'] = None
             print("Client was removed and printing len clients")
             print(len(task_manager.clients))
-    logging.info(f"Client disconnected: {ws.scope['user_id']}")
 
 
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)

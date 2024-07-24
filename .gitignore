@@ -1,5 +1,10 @@
 Scripts
 pyvenv.cfg
+.sesskey
+share
+*.db-wal
+*.db-shm
+*.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
