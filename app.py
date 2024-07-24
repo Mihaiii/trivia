@@ -13,7 +13,7 @@ from auth import HuggingFaceClient
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 20  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -42,7 +42,6 @@ css = [
     Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
     Style('.primary:active { background-color: #0056b3; }')
 ]
-countdown = QUESTION_COUNTDOWN_SEC
 #TODO: remove the app before making the repo public and properly handle the info, ofc
 huggingface_client = HuggingFaceClient(
     client_id="f7542bbf-4343-482d-8b58-9343f4f9e3ca",
@@ -94,6 +93,7 @@ class TaskManager:
         self.clients_lock = threading.Lock()
         self.task = None
         self.countdown_var = None
+        self.current_topic = None
 
     def reset(self):
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -116,7 +116,6 @@ class TaskManager:
             await asyncio.sleep(0.1)  # Avoid busy-waiting
 
     async def update_status(self, topic: Topic):
-        global current_topic
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
@@ -135,7 +134,7 @@ class TaskManager:
 
             await self.broadcast_next_topics()
 
-            if topic.status == "successful" and current_topic is None:
+            if topic.status == "successful" and self.current_topic is None:
                 should_consume = True
             if topic.status == "failed":
                 await asyncio.create_task(self.remove_failed_topic(topic))
@@ -148,7 +147,6 @@ class TaskManager:
             await self.consume_successful_topic()
 
     async def consume_successful_topic(self):
-        global current_topic
         topic = None
         logging.debug(f"consume_successful_topic before lock")
         async with self.topics_lock:
@@ -159,7 +157,7 @@ class TaskManager:
                 topic = successful_topics[0]  # Get the highest points successful topic
                 logging.debug(f"Topic obtained: {topic.topic}")
                 self.topics.remove(topic)
-                current_topic = topic
+                self.current_topic = topic
                 self.current_topic_start_time = asyncio.get_event_loop().time()
                 self.current_timeout_task = asyncio.create_task(self.topic_timeout())
                 async with self.users_lock:
@@ -183,7 +181,6 @@ class TaskManager:
             pass  # Handle cancellation if the task is cancelled
 
     async def check_topic_completion(self):
-        global current_topic
         should_consume = False
         async with self.users_lock:
             all_users_chosen = all(self.users.values())
@@ -193,9 +190,8 @@ class TaskManager:
             current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if current_topic and (
-                    current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
-                logging.debug(f"Completing topic: {current_topic.topic}")
+            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4 or all_users_chosen):
+                logging.debug(f"Completing topic: {self.current_topic.topic}")
                 should_consume = True
         if should_consume:
             if self.task:
@@ -203,7 +199,7 @@ class TaskManager:
                 self.reset()
             self.task = asyncio.create_task(self.count())
             async with self.past_topics_lock:
-                self.past_topics.append(current_topic)
+                self.past_topics.append(self.current_topic)
             await self.consume_successful_topic()
 
     async def remove_failed_topic(self, topic: Topic):
@@ -270,19 +266,37 @@ class TaskManager:
                         break
                 
     async def broadcast_past_topics(self, client=None):
-        global current_topic
-        async with self.past_topics_lock:
-            past_topics = list(self.past_topics)[::-1]
-        past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in
-                            past_topics]
-        await self.send_to_clients(Div(*past_topics_html, id="past_topics"), client)
+        if len(list(self.past_topics)) > 0:
+            async with self.past_topics_lock:
+                past_topic = list(self.past_topics)[-1]
+            random_numbers = random.sample(range(1, 11), 10)
+            past_topic.winners = [f"user{num}" for num in random_numbers]
+            past_topic.question.title = "example question?"
+            past_topic.question.answer = "example answer"
+
+            # past_topics_html = [Div(f"{item.topic} - {item.user} - {', '.join(item.winners)}", cls="card") for item in
+                                # past_topics]
+            past_topics_html = Div(Div(f"{past_topic.topic} - {past_topic.user}", style="text-align: center;"),
+                                   Div(f"Q: {past_topic.question.title}"),
+                                   Div(f"A: {past_topic.question.answer}"),
+                                   Div(f"Winners: ", Ol(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
+                                   cls="card")
+            with self.clients_lock:
+                clients = self.clients if client is None else [client]
+                for client in clients.copy():
+                    try:
+                        await client(Div(past_topics_html, id="past_topics"))
+                    except:
+                        self.clients.remove(client)
+                        logging.debug(f"Removed disconnected client: {client}")
+            # logging.debug("Broadcasting past topics")
 
     async def broadcast_current_question(self, client=None):
         current_question_info = Div(
             Div(
-                Div(current_topic.question.title, style="font-size: 30px;"),
-                Div(current_topic.user, cls="item left"),
-                Div(f"{current_topic.points} pts", cls="item right"),
+                Div(self.current_topic.question.title, style="font-size: 30px;"),
+                Div(self.current_topic.user, cls="item left"),
+                Div(f"{self.current_topic.points} pts", cls="item right"),
                 cls="card"),
             unselectedOptions()
         )
@@ -298,8 +312,16 @@ class TaskManager:
 
     async def broadcast_countdown(self, client=None):
         countdown_format = self.countdown_var if self.countdown_var >= 10 else f"0{self.countdown_var}"
-        countdown_div = Div(f"{countdown_format}", cls="countdown", style="text-align: center;")
-        await self.send_to_clients(Div(countdown_div, id="countdown"), client)
+        countdown_div = Div(f"{countdown_format}s", cls="countdown", style="text-align: center; font-size: 40px;")
+        with self.clients_lock:
+            clients = self.clients if client is None else [client]
+            for client in clients.copy():
+                try:
+                    await client(Div(countdown_div, id="countdown"))
+                except:
+                    self.clients.remove(client)
+                    logging.debug(f"Removed disconnected client: {client}")
+
 
 async def app_startup():
     num_executors = 2  # Change this to run more executors
@@ -326,13 +348,13 @@ async def post(session, app):
     global current_topic
     # TODO: save the user's choice based on the login data in the database
     return Div(
-        Button(current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -352,13 +374,13 @@ async def post(session):
     global current_topic
     # TODO: save the user's choice based on the login data in the database
     return Div(
-        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="primarly", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="primarly", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -378,13 +400,13 @@ async def post(session, app):
     global current_topic
     # TODO: save the user's choice based on the login data in the database
     return Div(
-        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="primarly", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="primarly", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -404,13 +426,13 @@ async def post(session):
     global current_topic
     # TODO: save the user's choice based on the login data in the database
     return Div(
-        Button(current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
+        Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
+        Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
+        Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
-        Button(current_topic.question.option_D, cls="primarly", hx_post="/choose_option_D",
+        Button(task_manager.current_topic.question.option_D, cls="primarly", hx_post="/choose_option_D",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
@@ -538,13 +560,12 @@ async def post(session, topic: str, points: int):
     return bid_form()
 
 
-async def on_connect(send):
-    global current_topic
+async def on_connect(send, ws):
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         task_manager.clients["unassigned_clients"].add(send)
     await task_manager.broadcast_next_topics(send)
-    if current_topic:
+    if task_manager.current_topic:
         await task_manager.broadcast_current_question(send)
     await task_manager.broadcast_past_topics(send)
 
