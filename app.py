@@ -330,8 +330,7 @@ async def post(session, app):
     task_manager = app.state.task_manager
     task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
-    # TODO: save the user's choice based on the login data in the database
-    return Div(
+    div_a = Div(
         Button(task_manager.current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
@@ -344,6 +343,9 @@ async def post(session, app):
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
     )
+    
+    for client in task_manager.clients[session['session_id']]:
+        await task_manager.send_to_clients(div_a, client)
 
 
 @rt('/choose_option_B')
@@ -355,8 +357,7 @@ async def post(session):
     task_manager = app.state.task_manager
     task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
-    # TODO: save the user's choice based on the login data in the database
-    return Div(
+    div_b = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="primarly", hx_post="/choose_option_B",
@@ -369,6 +370,9 @@ async def post(session):
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
     )
+    
+    for client in task_manager.clients[session['session_id']]:
+        await task_manager.send_to_clients(div_b, client)
 
 
 @rt('/choose_option_C')
@@ -380,7 +384,7 @@ async def post(session, app):
     task_manager = app.state.task_manager
     task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
-    return Div(
+    div_c =  Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
@@ -393,6 +397,9 @@ async def post(session, app):
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
     )
+    
+    for client in task_manager.clients[session['session_id']]:
+        await task_manager.send_to_clients(div_c, client)
 
 
 @rt('/choose_option_D')
@@ -404,7 +411,8 @@ async def post(session):
     task_manager = app.state.task_manager
     task_manager.users[session['session_id']] = True
     await task_manager.check_topic_completion()
-    return Div(
+    
+    div_d = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
@@ -417,6 +425,9 @@ async def post(session):
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
     )
+    
+    for client in task_manager.clients[session['session_id']]:
+        await task_manager.send_to_clients(div_d, client)
 
 def unselectedOptions():
     task_manager = app.state.task_manager
@@ -464,13 +475,6 @@ async def get(session, app, request):
         user_id = session['session_id']
         if user_id not in task_manager.clients:
             task_manager.clients[user_id] = set()
-        
-        #TODO
-        #client = request.cookies['session_']
-        #if client in task_manager.clients["unassigned_clients"]
-            #task_manager.clients["unassigned_clients"].remove(client)
-        #if client not in task_manager.clients[user_id]:
-            #task_manager.clients[user_id].add(client)
     
         task_manager.users[user_id] = False
         
@@ -504,7 +508,10 @@ async def get(session, app, request):
     if user_id:
         top_right_corner = Div(user_id + ": " + str(current_points) + " pct")
     else:
-        top_right_corner = A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state())    
+        top_right_corner = A(
+            Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"),
+            href=huggingface_client.login_link_with_state()
+            )    
 
     right_panel = Div(
         top_right_corner,
@@ -539,9 +546,16 @@ async def post(session, topic: str, points: int):
 
 
 async def on_connect(send, ws):
+    print(ws.scope)
+    print(ws.headers)
+    client_key = "unassigned_clients"
+    if ws.scope['session'] and ws.scope['session']['session_id']:
+        client_key = ws.scope['session']['session_id']
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
-        task_manager.clients["unassigned_clients"].add(send)
+        if not task_manager.clients[client_key]:
+            task_manager.clients[client_key] = set()
+        task_manager.clients[client_key].add(send)
     await task_manager.broadcast_next_topics(send)
     if task_manager.current_topic:
         await task_manager.broadcast_current_question(send)
