@@ -267,14 +267,14 @@ class TaskManager:
         if len(list(self.past_topics)) > 0:
             async with self.past_topics_lock:
                 past_topic = list(self.past_topics)[-1]
-            random_numbers = random.sample(range(1, 11), 10)
-            past_topic.winners = [f"user{num}" for num in random_numbers]
-            past_topic.question.title = "example question?"
-            past_topic.question.answer = "example answer"
+            # random_numbers = random.sample(range(1, 11), 10)
+            # past_topic.winners = [f"user{num}" for num in random_numbers]
+            # past_topic.question.title = "example question?"
+            # past_topic.question.answer = "example answer"
 
             past_topics_html = Div(Div(f"{past_topic.topic} - {past_topic.user}", style="text-align: center;"),
-                                   Div(f"Q: {past_topic.question.title}"),
-                                   Div(f"A: {past_topic.question.answer}"),
+                                   Div(f"Question: {past_topic.question.title}"),
+                                   Div(f"Answer: {past_topic.question.answer}"),
                                    Div(f"Winners: ", Ol(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
                                    cls="card")
             await self.send_to_clients(Div(past_topics_html, id="past_topics"), client)
@@ -476,7 +476,7 @@ async def get(session, app, request):
         if user_id not in task_manager.clients:
             task_manager.clients[user_id] = set()
         
-        db_player = db.q(f"select * from {players} where {players.c.name} like '{user_id}' limit 1")
+        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
 
         if not db_player:
             current_points = 20
