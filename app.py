@@ -548,8 +548,17 @@ async def post(session, topic: str, points: int):
         return bid_form()
     print(f"Topic: {topic}, points: {points}")
     #TODO: subtract the points of the user and do the check it can bid (has end result >=0 points)
-    task_manager = app.state.task_manager
-    await task_manager.add_user_topic(topic=topic, points=points)
+    if 'session_id' in session:
+        user_id = session['session_id']
+        db_player = db.q(f"select * from {players} where {players.c.name} like '{user_id}' limit 1")
+        players.xtra(name=user_id)
+        if db_player[0]['points'] - points > 0:
+            db_player[0]['points'] -= points
+            players.update(db_player[0])
+            task_manager = app.state.task_manager
+            await task_manager.add_user_topic(topic=topic, points=points)
+        else:
+            add_toast(session, "Not enough points", "error")
     return bid_form()
 
 
