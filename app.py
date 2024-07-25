@@ -40,7 +40,6 @@ css = [
     Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 20%;}'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 60%;}'),
     Style('.login { margin-bottom: 10px; }'),
-    # Style('@media (max-width: 768px) { .main { flex-direction: column; } .left-panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; } .right-panel { width: 100%; } }'),
     Style('.primary:active { background-color: #0056b3; }'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
     Style('@media (min-width: 769px) { .login_wrapper { display: none; }')
@@ -441,8 +440,8 @@ def bid_form():
     return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
                  Button('BID', cls='primary', style="width: 100%;"),
-                 action='/', hx_post='/bid'), hx_swap="outerHTML", style="border: 5px solid black; padding: 10px;"
-            )
+                 action='/', hx_post='/bid'), hx_swap="outerHTML", style="border: 5px solid black; padding: 10px; width: 300px; margin: 10px auto;"
+              )
 
 @rt("/auth/callback")
 def get(app, session, code: str = None):
@@ -485,8 +484,7 @@ async def get(session, app, request):
 
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
-        Div(id="next_topics"),
-        bid_form()
+        Div(id="next_topics")
         , cls='side-panel'
     )
     if user_id:
@@ -498,6 +496,7 @@ async def get(session, app, request):
         Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
+        bid_form(),
         cls="middle-panel"
     )
     right_panel = Div(
