@@ -469,7 +469,7 @@ def get(app, session, code: str = None):
 
 tabs = Nav(
     A("PLAY", href="/", role="button", cls="secondary"),
-    A("LEADERBOARD", href="/leaderboard", role="button", cls="secondary"),
+    A("STATS", href="/stats", role="button", cls="secondary"),
     A("FAQ", href="/faq", role="button", cls="secondary"),
     cls="tabs"
 )
@@ -480,8 +480,9 @@ async def get(session, app, request):
     user_id = None
     if 'session_id' in session:
         user_id = session['session_id']
-        if user_id not in task_manager.clients:
-            task_manager.clients[user_id] = set()
+        with task_manager.clients_lock:
+            if user_id not in task_manager.clients:
+                task_manager.clients[user_id] = set()
         
         if user_id not in task_manager.user_dict:
             task_manager.user_dict[user_id] = None
@@ -534,14 +535,18 @@ async def get(session, app, request):
     )
     return container
 
-@rt('/leaderboard')
+@rt('/stats')
 async def get(session, app, request):
+    task_manager = app.state.task_manager
     db_player = db.q(f"select * from {players} order by points desc limit 20")
-    cells = []
-    print(db_player)
-    for row in db_player:
-        cells.append(Tr(Td(row['name']), Td(row['points'])))
-    main_content = Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells)
+    cells = [Tr(Td(row['name']), Td(row['points'])) for row in db_player]
+    with task_manager.clients_lock:
+        c = [c for c in task_manager.clients if c != "unassigned_clients"]
+        
+    main_content =  Div(
+        Div(H1("Logged in users (" + str(len(c)) + "):"), Div(", ".join(c))),
+        Div(H1("Leaderboard"), Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells))
+    )
     return Div(
         tabs,
         main_content,
