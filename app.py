@@ -280,7 +280,7 @@ class TaskManager:
                 db_player[0]['points'] += (len(self.past_topic.winners) - self.past_topic.winners.index(winner)) * 10
                 players.update(db_player[0])
                 
-                elem = Div(winner + ": " + str(db_player[0]['points']) + " pct", cls='login', id='login_points')
+                elem = Div(winner + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
                 for client in self.clients[winner]:
                     await self.send_to_clients(elem, client)
                             
@@ -612,7 +612,7 @@ async def post(session, topic: str, points: int):
             players.update(db_player[0])
 
             await task_manager.add_user_topic(topic=topic, points=points)
-            elem = Div(user_id + ": " + str(db_player[0]['points']) + " pct", cls='login', id='login_points')
+            elem = Div(user_id + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
 
             for client in task_manager.clients[user_id]:
                 await task_manager.send_to_clients(elem, client)
