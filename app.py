@@ -557,7 +557,7 @@ async def post(session, topic: str, points: int):
     if 'session_id' in session:
         user_id = session['session_id']
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
-        if db_player[0]['points'] - points >= 0:
+        if db_player[0]['points'] - points >= 0 and points >= BID_MIN_POINTS:
             db_player[0]['points'] -= points
             players.update(db_player[0])
 
