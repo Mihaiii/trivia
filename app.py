@@ -19,6 +19,7 @@ MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
 NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
+TOPIC_MAX_LENGTH = 25 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 
 db = database('uplayers.db')
 players = db.t.players
@@ -34,6 +35,7 @@ css = [
     Style('.container { display: flex; flex-direction: column; height: 100vh; }'),
     Style('.main { display: flex; flex: 1; flex-direction: row; }'),
     Style('.card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; text-align: center; overflow: hidden;}'),
+    Style('.past-card { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; text-align: left; overflow: hidden;}'),
     Style('.item { display: inline-block; }'),
     Style('.left { float: left; }'),
     Style('.right { float: right }'),
@@ -273,16 +275,19 @@ class TaskManager:
         if len(list(self.past_topics)) > 0:
             async with self.past_topics_lock:
                 past_topic = list(self.past_topics)[-1]
-            # random_numbers = random.sample(range(1, 11), 10)
-            # past_topic.winners = [f"user{num}" for num in random_numbers]
-            # past_topic.question.title = "example question?"
-            # past_topic.question.answer = "example answer"
-
-            past_topics_html = Div(Div(f"{past_topic.topic} - {past_topic.user}", style="text-align: center;"),
-                                   Div(f"Question: {past_topic.question.title}"),
-                                   Div(f"Answer: {past_topic.question.answer}"),
-                                   Div(f"Winners: ", Ol(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
-                                   cls="card")
+            random_numbers = random.sample(range(1, 11), 10)
+            past_topic.winners = [f"userdsadas asdsacad sadsdsadas sadsa{num}" for num in random_numbers]
+            past_topic.question.title = "example question?"
+            past_topic.question.answer = "A"
+            ans = getattr(past_topic.question, f"option_{past_topic.question.answer}")
+            past_topics_html = Div(Div(B("Question:"), P(past_topic.question.title)),
+                                   Div(B("Correct answer:"), P(ans)),
+                                   Div(
+                                        B("Winners:"),
+                                        Table(*[Tr(Td(winner), Td(f"{(len(past_topic.winners) - past_topic.winners.index(winner)) * 10} pts")) for winner in past_topic.winners]),
+                                   ),
+                                   #Div(B("Winners:"), Ul(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
+                                   cls="past-card")
             await self.send_to_clients(Div(past_topics_html, id="past_topics"), client)
 
     async def broadcast_current_question(self, client=None):
@@ -446,7 +451,7 @@ def unselectedOptions():
     )
 
 def bid_form():
-    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
+    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC", maxlength=f"{TOPIC_MAX_LENGTH}"),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
                  Button('BID', cls='primary', style='width: 100%;'),
                  action='/', hx_post='/bid', style='border: 5px solid black; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
@@ -505,7 +510,7 @@ async def get(session, app, request):
         cls='side-panel'
     )
     if user_id:
-        top_right_corner = Div(user_id + ": " + str(current_points) + " pct", cls='login', id='login_points')
+        top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
     else:
         top_right_corner = Div(A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state()), cls='login')
 
@@ -567,12 +572,20 @@ async def post(session, topic: str, points: int):
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
         return bid_form()
     print(f"Topic: {topic}, points: {points}")
-    #TODO: subtract the points of the user and do the check it can bid (has end result >=0 points)
+    
+    if points < BID_MIN_POINTS:
+        add_toast(session, f"Bid at least {BID_MIN_POINTS} points", "error")
+        return bid_form()
+    
+    if len(topic) > TOPIC_MAX_LENGTH:
+        add_toast(session, f"The topic max length is {TOPIC_MAX_LENGTH} characters", "error")
+        return bid_form()
+    
     task_manager = app.state.task_manager
     if 'session_id' in session:
         user_id = session['session_id']
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
-        if db_player[0]['points'] - points >= 0 and points >= BID_MIN_POINTS:
+        if db_player[0]['points'] - points >= 0:
             db_player[0]['points'] -= points
             players.update(db_player[0])
 
