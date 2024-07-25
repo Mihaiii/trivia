@@ -520,13 +520,10 @@ async def get(session, app, request):
     return container
 
 @rt('/leaderboard')
-async def get(session, app, request):
+async def get():
     db_player = db.q(f"select * from {players} order by points desc limit 20")
-    cells = []
-    print(db_player)
-    for row in db_player:
-        cells.append(Tr(Td(row['name']), Td(row['points'])))
-    main_content = Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells)
+    cells = [Tr(Td(row['name']), Td(row['points'])) for row in db_player]
+    main_content = Table(Tr(Th(B('Huggingface Username')), Th(B("Points"))), *cells)
     return Div(
         tabs,
         main_content,
@@ -534,7 +531,7 @@ async def get(session, app, request):
     )
 
 @rt('/faq')
-async def get(session, app, request):
+async def get():
     return Div(
         tabs,
         Div("not yet implemented"),
