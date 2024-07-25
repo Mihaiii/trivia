@@ -13,7 +13,7 @@ from auth import HuggingFaceClient
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 10  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -299,7 +299,8 @@ class TaskManager:
 
     async def broadcast_countdown(self, client=None):
         countdown_format = self.countdown_var if self.countdown_var >= 10 else f"0{self.countdown_var}"
-        countdown_div = Div(f"{countdown_format}s", cls="countdown", style="text-align: center; font-size: 40px;", id="countdown")
+        style = "color: red;" if self.countdown_var <= 5 else ""
+        countdown_div = Div(f"{countdown_format}", cls="countdown", style="text-align: center; font-size: 40px;" + style, id="countdown")
         await self.send_to_clients(countdown_div, client)
 
 
@@ -476,6 +477,9 @@ async def get(session, app, request):
         if user_id not in task_manager.clients:
             task_manager.clients[user_id] = set()
         
+        if user_id not in task_manager.user_dict:
+            task_manager.user_dict[user_id] = None
+
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
 
         if not db_player:
@@ -557,7 +561,7 @@ async def post(session, topic: str, points: int):
     if 'session_id' in session:
         user_id = session['session_id']
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
-        if db_player[0]['points'] - points > 0:
+        if db_player[0]['points'] - points >= 0 and points >= BID_MIN_POINTS:
             db_player[0]['points'] -= points
             players.update(db_player[0])
 
