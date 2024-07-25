@@ -39,10 +39,10 @@ css = [
     Style('.right { float: right }'),
     Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 20%;}'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 60%;}'),
-    Style('.login { margin-bottom: 10px; }'),
+    Style('.login { margin-bottom: 10px; max-width: fit-content; margin-left: auto; margin-right: auto;}'),
     Style('.primary:active { background-color: #0056b3; }'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
-    Style('@media (min-width: 769px) { .login_wrapper { display: none; }')
+    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; }')
 ]
 #TODO: remove the app before making the repo public and properly handle the info, ofc
 huggingface_client = HuggingFaceClient(
@@ -94,6 +94,7 @@ class TaskManager:
         self.task = None
         self.countdown_var = QUESTION_COUNTDOWN_SEC
         self.current_topic = None
+        self.user_dict = {}
 
     def reset(self):
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -266,14 +267,14 @@ class TaskManager:
         if len(list(self.past_topics)) > 0:
             async with self.past_topics_lock:
                 past_topic = list(self.past_topics)[-1]
-            random_numbers = random.sample(range(1, 11), 10)
-            past_topic.winners = [f"user{num}" for num in random_numbers]
-            past_topic.question.title = "example question?"
-            past_topic.question.answer = "example answer"
+            # random_numbers = random.sample(range(1, 11), 10)
+            # past_topic.winners = [f"user{num}" for num in random_numbers]
+            # past_topic.question.title = "example question?"
+            # past_topic.question.answer = "example answer"
 
             past_topics_html = Div(Div(f"{past_topic.topic} - {past_topic.user}", style="text-align: center;"),
-                                   Div(f"Q: {past_topic.question.title}"),
-                                   Div(f"A: {past_topic.question.answer}"),
+                                   Div(f"Question: {past_topic.question.title}"),
+                                   Div(f"Answer: {past_topic.question.answer}"),
                                    Div(f"Winners: ", Ol(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
                                    cls="card")
             await self.send_to_clients(Div(past_topics_html, id="past_topics"), client)
@@ -291,7 +292,6 @@ class TaskManager:
 
     async def count(self):
         self.countdown_var = QUESTION_COUNTDOWN_SEC
-        # await self.consume_successful_topic()
         while self.countdown_var >= 0:
             await self.broadcast_countdown()
             await asyncio.sleep(1)
@@ -307,6 +307,8 @@ async def app_startup():
     num_executors = 2  # Change this to run more executors
     task_manager = TaskManager(num_executors)
     app.state.task_manager = task_manager
+    results = db.q(f"SELECT {players.c.name}, {players.c.id} FROM {players}")
+    task_manager.user_dict = {row['name']: row['id'] for row in results}
     asyncio.create_task(task_manager.monitor_topics())
     for i in range(num_executors):
         asyncio.create_task(task_manager.run_executor(i))
@@ -439,9 +441,9 @@ def unselectedOptions():
 def bid_form():
     return Div(Form(Input(type='text', name='topic', placeholder="TOPIC"),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points'),
-                 Button('BID', cls='primary', style="width: 100%;"),
-                 action='/', hx_post='/bid'), hx_swap="outerHTML", style="border: 5px solid black; padding: 10px; width: 300px; margin: 10px auto;"
-              )
+                 Button('BID', cls='primary', style='width: 100%;'),
+                 action='/', hx_post='/bid', style='border: 5px solid black; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
+            )
 
 @rt("/auth/callback")
 def get(app, session, code: str = None):
@@ -474,29 +476,33 @@ async def get(session, app, request):
         if user_id not in task_manager.clients:
             task_manager.clients[user_id] = set()
         
-        db_player = db.q(f"select * from {players} where {players.c.name} like '{user_id}' limit 1")
+        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
 
         if not db_player:
             current_points = 20
             players.insert({'name': user_id, 'points': current_points})
+            query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
+            result = db.q(query, (user_id,))
+            task_manager.user_dict[user_id] = result[0]['id']
         else:
             current_points = db_player[0]['points']
 
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
-        Div(id="next_topics")
-        , cls='side-panel'
+        Div(id="next_topics"),
+        bid_form(),
+        cls='side-panel'
     )
     if user_id:
-        top_right_corner = Div(user_id + ": " + str(current_points) + " pct", cls='login', style="max-width: fit-content; margin-left: auto; margin-right: auto;")
+        top_right_corner = Div(user_id + ": " + str(current_points) + " pct", cls='login', id='login_points')
     else:
-        top_right_corner = Div(A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state()), cls='login', style="max-width: fit-content; margin-left: auto; margin-right: auto;")
+        top_right_corner = Div(A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state()), cls='login')
 
     middle_panel = Div(
         Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
-        bid_form(),
+        Div(bid_form(), cls='bid_wrapper'),
         cls="middle-panel"
     )
     right_panel = Div(
@@ -519,10 +525,13 @@ async def get(session, app, request):
     return container
 
 @rt('/leaderboard')
-async def get():
+async def get(session, app, request):
     db_player = db.q(f"select * from {players} order by points desc limit 20")
-    cells = [Tr(Td(row['name']), Td(row['points'])) for row in db_player]
-    main_content = Table(Tr(Th(B('Huggingface Username')), Th(B("Points"))), *cells)
+    cells = []
+    print(db_player)
+    for row in db_player:
+        cells.append(Tr(Td(row['name']), Td(row['points'])))
+    main_content = Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells)
     return Div(
         tabs,
         main_content,
@@ -530,7 +539,7 @@ async def get():
     )
 
 @rt('/faq')
-async def get():
+async def get(session, app, request):
     return Div(
         tabs,
         Div("not yet implemented"),
@@ -545,7 +554,20 @@ async def post(session, topic: str, points: int):
     print(f"Topic: {topic}, points: {points}")
     #TODO: subtract the points of the user and do the check it can bid (has end result >=0 points)
     task_manager = app.state.task_manager
-    await task_manager.add_user_topic(topic=topic, points=points)
+    if 'session_id' in session:
+        user_id = session['session_id']
+        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
+        if db_player[0]['points'] - points > 0:
+            db_player[0]['points'] -= points
+            players.update(db_player[0])
+
+            await task_manager.add_user_topic(topic=topic, points=points)
+            elem = Div(user_id + ": " + str(db_player[0]['points']) + " pct", cls='login', id='login_points')
+
+            for client in task_manager.clients[user_id]:
+                await task_manager.send_to_clients(elem, client)
+        else:
+            add_toast(session, "Not enough points", "error")
     return bid_form()
 
 
