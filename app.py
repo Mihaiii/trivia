@@ -257,11 +257,17 @@ class TaskManager:
             try:
                 await client(element)
             except:
-                for key, client_set in self.clients.items():
-                    if client in client_set:
-                        client_set.remove(client)
-                        logging.debug(f"Removed disconnected client: {client}")
-                        break
+                with self.clients_lock:
+                    key_to_remove = None
+                    for key, client_set in self.clients.items():
+                        if client in client_set:
+                            client_set.remove(client)
+                            if len(client_set) == 0:
+                                key_to_remove = key
+                            logging.debug(f"Removed disconnected client: {client}")
+                            break
+                    if key_to_remove:
+                        self.clients.pop(key_to_remove)
                 
     async def broadcast_past_topics(self, client=None):
         if len(list(self.past_topics)) > 0:
@@ -581,7 +587,7 @@ async def on_connect(send, ws):
         client_key = ws.scope['session']['session_id']
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
-        if not task_manager.clients[client_key]:
+        if client_key not in task_manager.clients:
             task_manager.clients[client_key] = set()
         task_manager.clients[client_key].add(send)
     await task_manager.broadcast_next_topics(send)
@@ -596,11 +602,18 @@ async def on_disconnect(send, session):
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         print("I'm inside the lock")
+        key_to_remove = None
         if send in task_manager.clients.copy():
             for key, client_set in task_manager.clients.items():
                 if send in client_set:
                     client_set.remove(send)
+                    if len(client_set) == 0:
+                        key_to_remove = key
                     break
+                
+            if key_to_remove:
+                task_manager.clients.pop(key_to_remove)
+                        
             if session:
                 session['session_id'] = None
             print("Client was removed and printing len clients")
