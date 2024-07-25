@@ -4,11 +4,10 @@ import asyncio
 from collections import deque
 from dataclasses import dataclass, field
 import concurrent.futures
-import json
 import logging
 import random
 import threading
-from typing import List
+from typing import List, Tuple
 from auth import HuggingFaceClient
 
 logging.basicConfig(level=logging.DEBUG)
@@ -60,7 +59,7 @@ class Question:
     option_B: str
     option_C: str
     option_D: str
-    answer: str
+    correct_answer: str
 
 
 @dataclass(order=True)
@@ -69,6 +68,7 @@ class Topic:
     topic: str = field(compare=False)
     status: str = field(default="pending", compare=False)
     user: str = field(default="[bot]", compare=False)
+    answers: List[Tuple[str, str]] = field(default_factory=list, compare=False)
     winners: List[str] = field(default_factory=list, compare=False)
     question: Question = field(default=None, compare=False)
 
@@ -85,8 +85,8 @@ class TaskManager:
     def __init__(self, num_executors: int):
         self.topics = deque()
         self.topics_lock = asyncio.Lock()
-        self.past_topics = deque(maxlen=5)
-        self.past_topics_lock = asyncio.Lock()
+        self.answers_lock = asyncio.Lock()
+        self.past_topic = None
         self.executors = [concurrent.futures.ThreadPoolExecutor(max_workers=1) for _ in range(num_executors)]
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
@@ -168,7 +168,8 @@ class TaskManager:
             logging.debug(f"We have a topic to broadcast: {topic.topic}")
             await self.broadcast_current_question()
             await self.broadcast_next_topics()
-            await self.broadcast_past_topics()
+            await self.compute_winners()
+            await self.broadcast_past_topic()
             logging.debug(f"Topic consumed: {topic.topic}")
             logging.debug(f"Length of self.topics: {len(self.topics)}")
         return topic
@@ -198,8 +199,7 @@ class TaskManager:
                 self.task.cancel()
                 self.reset()
             self.task = asyncio.create_task(self.count())
-            async with self.past_topics_lock:
-                self.past_topics.append(self.current_topic)
+            self.past_topic = self.current_topic
             await self.consume_successful_topic()
 
     async def remove_failed_topic(self, topic: Topic):
@@ -270,25 +270,32 @@ class TaskManager:
                             break
                     if key_to_remove:
                         self.clients.pop(key_to_remove)
+    async def compute_winners(self):
+        if self.past_topic:
+            async with self.answers_lock:
+                self.past_topic.winners = [a[0] for a in self.past_topic.answers if a[1] == self.past_topic.question.correct_answer]
+            
+            for winner in self.past_topic.winners:
+                db_player = db.q(f"select * from {players} where {players.c.id} = '{self.user_dict[winner]}'")
+                db_player[0]['points'] += (len(self.past_topic.winners) - self.past_topic.winners.index(winner)) * 10
+                players.update(db_player[0])
                 
-    async def broadcast_past_topics(self, client=None):
-        if len(list(self.past_topics)) > 0:
-            async with self.past_topics_lock:
-                past_topic = list(self.past_topics)[-1]
-            random_numbers = random.sample(range(1, 11), 10)
-            past_topic.winners = [f"userdsadas asdsacad sadsdsadas sadsa{num}" for num in random_numbers]
-            past_topic.question.title = "example question?"
-            past_topic.question.answer = "A"
-            ans = getattr(past_topic.question, f"option_{past_topic.question.answer}")
-            past_topics_html = Div(Div(B("Question:"), P(past_topic.question.title)),
+                elem = Div(winner + ": " + str(db_player[0]['points']) + " pct", cls='login', id='login_points')
+                for client in self.clients[winner]:
+                    await self.send_to_clients(elem, client)
+                            
+    async def broadcast_past_topic(self, client=None):
+        if self.past_topic:                
+            ans = getattr(self.past_topic.question, f"option_{self.past_topic.question.correct_answer}")
+            past_topic_html = Div(Div(B("Question:"), P(self.past_topic.question.title)),
                                    Div(B("Correct answer:"), P(ans)),
                                    Div(
                                         B("Winners:"),
-                                        Table(*[Tr(Td(winner), Td(f"{(len(past_topic.winners) - past_topic.winners.index(winner)) * 10} pts")) for winner in past_topic.winners]),
+                                        Table(*[Tr(Td(winner), Td(f"{(len(self.past_topic.winners) - self.past_topic.winners.index(winner)) * 10} pts")) for winner in self.past_topic.winners]),
                                    ),
-                                   #Div(B("Winners:"), Ul(Li(f"{winner} - {(len(past_topic.winners) - past_topic.winners.index(winner)) * 10}pts") for winner in past_topic.winners)),
                                    cls="past-card")
-            await self.send_to_clients(Div(past_topics_html, id="past_topics"), client)
+
+            await self.send_to_clients(Div(past_topic_html, id="past_topic"), client)
 
     async def broadcast_current_question(self, client=None):
         current_question_info = Div(
@@ -337,7 +344,11 @@ async def post(session, app):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    await task_manager.check_topic_completion()
+    
+    async with task_manager.answers_lock:
+        task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
+        task_manager.current_topic.answers.append((session['session_id'], "A"))
+        
     div_a = Div(
         Button(task_manager.current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -363,7 +374,11 @@ async def post(session):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    await task_manager.check_topic_completion()
+    
+    async with task_manager.answers_lock:
+        task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
+        task_manager.current_topic.answers.append((session['session_id'], "B"))
+    
     div_b = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -389,7 +404,11 @@ async def post(session, app):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    await task_manager.check_topic_completion()
+    
+    async with task_manager.answers_lock:
+        task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
+        task_manager.current_topic.answers.append((session['session_id'], "C"))
+        
     div_c =  Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -415,8 +434,11 @@ async def post(session):
         return unselectedOptions()
     
     task_manager = app.state.task_manager
-    await task_manager.check_topic_completion()
     
+    async with task_manager.answers_lock:
+        task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
+        task_manager.current_topic.answers.append((session['session_id'], "D"))
+        
     div_d = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
@@ -523,7 +545,7 @@ async def get(session, app, request):
     )
     right_panel = Div(
         top_right_corner,
-        Div(id="past_topics"),
+        Div(id="past_topic"),
         cls="side-panel"
     )
     main_content = Div(
@@ -611,7 +633,7 @@ async def on_connect(send, ws):
     await task_manager.broadcast_next_topics(send)
     if task_manager.current_topic:
         await task_manager.broadcast_current_question(send)
-    await task_manager.broadcast_past_topics(send)
+    await task_manager.broadcast_past_topic(send)
 
 
 async def on_disconnect(send, session):
