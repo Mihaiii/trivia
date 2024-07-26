@@ -505,7 +505,7 @@ def unselectedOptions():
     )
 
 def bid_form():
-    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC", maxlength=f"{TOPIC_MAX_LENGTH}", required=True),
+    return Div(Form(Input(type='text', name='topic', placeholder="frieren borgar", maxlength=f"{TOPIC_MAX_LENGTH}", required=True),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS, required=True),
                  Button('BID', cls='primary', style='width: 100%;'),
                  action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
