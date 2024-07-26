@@ -50,7 +50,7 @@ scripts = [
     Script("""
            document.addEventListener("DOMContentLoaded", function(event) {
                 me("#theme-toggle").on("click", _ => 
-                    me("html").attribute("data-theme", me("html").attribute("data-theme") === "light" ? "dark" : "light")
+                    me("html").attribute("data-theme", me("html").attribute("data-theme") === "dark" ? "light" : "dark")
                 );
             });
         """)
