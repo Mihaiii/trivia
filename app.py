@@ -12,7 +12,7 @@ from auth import HuggingFaceClient
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 10  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 50  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -250,10 +250,10 @@ class TaskManager:
     async def broadcast_next_topics(self, client=None):
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
         status_dict = {
-            'failed': 'red',
-            'pending': 'white',
-            'computing': 'yellow',
-            'successful': 'green'
+            'failed': '#dc552c',
+            'pending': '#ded5c4',
+            'computing': '#fff1c1',
+            'successful': '#77ab59'
         }
         next_topics_html = [Div(Div(f"{item.topic if item.status not in ['pending', 'failed'] else 'Topic Censored'}"),
                                 Div(item.user, cls="item left"), Div(f"{item.points} pts", cls="item right"),
@@ -486,7 +486,7 @@ def bid_form():
     return Div(Form(Input(type='text', name='topic', placeholder="TOPIC", maxlength=f"{TOPIC_MAX_LENGTH}"),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS),
                  Button('BID', cls='primary', style='width: 100%;'),
-                 action='/', hx_post='/bid', style='border: 5px solid black; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
+                 action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
             )
 
 @rt("/auth/callback")
