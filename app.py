@@ -505,8 +505,8 @@ def unselectedOptions():
     )
 
 def bid_form():
-    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC", maxlength=f"{TOPIC_MAX_LENGTH}"),
-                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS),
+    return Div(Form(Input(type='text', name='topic', placeholder="TOPIC", maxlength=f"{TOPIC_MAX_LENGTH}", required=True),
+                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS, required=True),
                  Button('BID', cls='primary', style='width: 100%;'),
                  action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
             )
@@ -636,6 +636,10 @@ async def post(session, topic: str, points: int):
         add_toast(session, f"The topic max length is {TOPIC_MAX_LENGTH} characters", "error")
         return bid_form()
     
+    if len(topic) == 0:
+        add_toast(session, "Cannot send empty topic", "error")
+        return bid_form()
+
     task_manager = app.state.task_manager
     if 'session_id' in session:
         user_id = session['session_id']
