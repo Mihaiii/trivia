@@ -38,12 +38,22 @@ css = [
     Style('.item { display: inline-block; }'),
     Style('.left { float: left; }'),
     Style('.right { float: right }'),
-    Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; border-right: 1px solid #ddd; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 20%;}'),
+    Style('.side-panel { display: flex; flex-direction: column; width: 20%; padding: 10px; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 20%;}'),
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 60%;}'),
     Style('.login { margin-bottom: 10px; max-width: fit-content; margin-left: auto; margin-right: auto;}'),
     Style('.primary:active { background-color: #0056b3; }'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
     Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; }')
+]
+
+scripts = [
+    Script("""
+           document.addEventListener("DOMContentLoaded", function(event) {
+                me("#theme-toggle").on("click", _ => 
+                    me("html").attribute("data-theme", me("html").attribute("data-theme") === "light" ? "dark" : "light")
+                );
+            });
+        """)
 ]
 #TODO: remove the app before making the repo public and properly handle the info, ofc
 huggingface_client = HuggingFaceClient(
@@ -333,7 +343,7 @@ async def app_startup():
         asyncio.create_task(task_manager.run_executor(i))
 
 
-app = FastHTML(hdrs=(css), ws_hdr=True, on_startup=[app_startup], debug=True)
+app = FastHTML(hdrs=(css, scripts), ws_hdr=True, on_startup=[app_startup], debug=True)
 rt = app.route
 setup_toasts(app)
 
@@ -498,6 +508,7 @@ tabs = Nav(
     A("PLAY", href="/", role="button", cls="secondary"),
     A("STATS", href="/stats", role="button", cls="secondary"),
     A("FAQ", href="/faq", role="button", cls="secondary"),
+    Button("theme", id="theme-toggle", cls="secondary"),
     cls="tabs"
 )
     
