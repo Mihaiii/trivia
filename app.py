@@ -48,11 +48,29 @@ css = [
 
 scripts = [
     Script("""
-           document.addEventListener("DOMContentLoaded", function(event) {
+           document.addEventListener("DOMContentLoaded", function(event) {            
+                function getColorSchemePreference() {
+                    ls = localStorage.getItem("triviaTheme")
+                    if (ls) {
+                        return ls;
+                    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                        return 'dark';
+                    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                        return 'light';
+                    } else {
+                        return 'light';
+                    }
+                }
+                me("html").attribute("data-theme", getColorSchemePreference())
                 me("#theme-toggle").on("click", _ => 
-                    me("html").attribute("data-theme", me("html").attribute("data-theme") === "dark" ? "light" : "dark")
+                {
+                    newTheme = me("html").attribute("data-theme") === "dark" ? "light" : "dark"
+                    me("html").attribute("data-theme", newTheme)
+                    localStorage.setItem("triviaTheme", newTheme)
+                }
                 );
             });
+            
         """)
 ]
 #TODO: remove the app before making the repo public and properly handle the info, ofc
@@ -251,8 +269,8 @@ class TaskManager:
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
         status_dict = {
             'failed': '#dc552c',
-            'pending': '#ded5c4',
-            'computing': '#fff1c1',
+            'pending': '#ede7dd',
+            'computing': '#cfb767',
             'successful': '#77ab59'
         }
         next_topics_html = [Div(Div(f"{item.topic if item.status not in ['pending', 'failed'] else 'Topic Censored'}"),
@@ -280,18 +298,22 @@ class TaskManager:
                             break
                     if key_to_remove:
                         self.clients.pop(key_to_remove)
+                        
     async def compute_winners(self):
         if self.past_topic:
             async with self.answers_lock:
                 self.past_topic.winners = [a[0] for a in self.past_topic.answers if a[1] == self.past_topic.question.correct_answer]
             
-            for winner in self.past_topic.winners:
-                db_player = db.q(f"select * from {players} where {players.c.id} = '{self.user_dict[winner]}'")
-                db_player[0]['points'] += (len(self.past_topic.winners) - self.past_topic.winners.index(winner)) * 10
-                players.update(db_player[0])
+            ids = ", ".join([str(self.user_dict[w]) for w in self.past_topic.winners])
+            db_player = db.q(f"select * from {players} where {players.c.id} in ({ids})")
+            
+            for db_winner in db_player:
+                winner_name = db_winner['name']
+                db_winner['points'] += (len(self.past_topic.winners) - self.past_topic.winners.index(winner_name)) * 10
+                players.update(db_winner)
                 
-                elem = Div(winner + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
-                for client in self.clients[winner]:
+                elem = Div(winner_name + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
+                for client in self.clients[winner_name]:
                     await self.send_to_clients(elem, client)
                             
     async def broadcast_past_topic(self, client=None):
@@ -545,7 +567,7 @@ async def get(session, app, request):
     if user_id:
         top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
     else:
-        top_right_corner = Div(A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg"), href=huggingface_client.login_link_with_state()), cls='login')
+        top_right_corner = Div(A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()), cls='login')
 
     middle_panel = Div(
         Div(top_right_corner, cls='login_wrapper'),
