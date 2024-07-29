@@ -356,7 +356,7 @@ setup_toasts(app)
 @rt('/choose_option_A')
 async def post(session, app):
     if('session_id' not in session):
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -386,7 +386,7 @@ async def post(session, app):
 @rt('/choose_option_B')
 async def post(session):
     if('session_id' not in session):
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -416,7 +416,7 @@ async def post(session):
 @rt('/choose_option_C')
 async def post(session, app):
     if('session_id' not in session):
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -446,7 +446,7 @@ async def post(session, app):
 @rt('/choose_option_D')
 async def post(session):
     if('session_id' not in session):
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -611,7 +611,7 @@ async def get(session, app, request):
 @rt("/bid")
 async def post(session, topic: str, points: int):
     if('session_id' not in session):
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button.", "error")
+        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return bid_form()
     print(f"Topic: {topic}, points: {points}")
     
