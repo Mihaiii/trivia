@@ -22,40 +22,7 @@ NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL L
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
 TOPIC_MAX_LENGTH = 25 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 MAX_NR_TOPICS = 50
-
-FAQ_QUESTIONS = [
-    "How can I contact the authors?",
-    "Who built the trivia game?",
-    "Where can I see the source code?",
-    "Will you add more login in providers (ex: Gmail, Github)?",
-    "How do the you make money off it?",
-    "How does the search bar work?",
-    "How can I change the theme to dark/light?",
-    "What technology you used to build this?",
-    "What happens if I try to play from multiple devices or browser tabs?",
-    "Is the website mobile frendly?",
-    "Where can I offer feedback?",
-    "I like this project. How can I help out? (Star on github)",
-    "What data you store? (Mention that we don't know what Huggingface stores)",
-    "A trivia question has an incorrect answer. Where can I report it?",
-    "A trivia question was not generated based on the provided topic. Where can I report it?",
-    "I found a bug in the application. Where can I report it?",
-    "How is the score decided?",
-    "How does this work?",
-    "What LLM is used to generate questions?",
-    "How do you ensure the trivia questions won't repeat?",
-    "What languages are supported?",
-    "How do you ensure people won't request illegal topics?",
-    "Is this safe for children? Is there a minimum age?",
-    "What is the purpose of this game?",
-    "How can I change my username?",
-    "What's on the authors roadmap regarding this project?",
-    "Where can I access the trivia game?",
-    "Does it matter how fast/quick I provide a response?",
-    "I provided a wrong answer to a trivia question and then I changed my mind. How can I update my answer?",
-    "If I don't know the answer to a trivia question, should I still choose an option or is better not to?"
-]
-
+DUPLICATE_TOPIC_THRESHOLD = 0.7
 
 db = database('uplayers.db')
 players = db.t.players
@@ -663,17 +630,17 @@ async def post(session, topic: str, points: int):
     task_manager = app.state.task_manager
 
     async with task_manager.topics_lock:
-        if similar(topic, task_manager.current_topic.topic) >= 0.7:
-            add_toast(session, f"Topic '{topic}' already exists")
+        if similar(topic, task_manager.current_topic.topic) >= DUPLICATE_TOPIC_THRESHOLD:
+            add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
             return bid_form()
 
         for t in task_manager.topics:
-            if similar(t.topic, topic) >= 0.7:
-                add_toast(session, f"Topic '{topic}' already exists")
+            if similar(t.topic, topic) >= DUPLICATE_TOPIC_THRESHOLD:
+                add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
                 return bid_form()
 
-        if similar(t.topic, task_manager.past_topic.topic) >= 0.7:
-            add_toast(session, f"Topic '{topic}' already exists")
+        if similar(t.topic, task_manager.past_topic.topic) >= DUPLICATE_TOPIC_THRESHOLD:
+            add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
             return bid_form()
 
     if 'session_id' in session:
