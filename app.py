@@ -262,8 +262,6 @@ class TaskManager:
                 for i in range(6):
                     self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
                 self.topics = deque(sorted(self.topics, reverse=True))
-                if len(self.topics) > MAX_NR_TOPICS:
-                    self.topics = self.topics[::-MAX_NR_TOPICS]
                 await self.broadcast_next_topics()
                 logging.debug("Default topics added")
 
