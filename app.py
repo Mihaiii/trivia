@@ -22,6 +22,40 @@ BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN 
 TOPIC_MAX_LENGTH = 25 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 MAX_NR_TOPICS = 50
 
+FAQ_QUESTIONS = [
+    "How can I contact the authors?",
+    "Who built the trivia game?",
+    "Where can I see the source code?",
+    "Will you add more login in providers (ex: Gmail, Github)?",
+    "How do the you make money off it?",
+    "How does the search bar work?",
+    "How can I change the theme to dark/light?",
+    "What technology you used to build this?",
+    "What happens if I try to play from multiple devices or browser tabs?",
+    "Is the website mobile frendly?",
+    "Where can I offer feedback?",
+    "I like this project. How can I help out? (Star on github)",
+    "What data you store? (Mention that we don't know what Huggingface stores)",
+    "A trivia question has an incorrect answer. Where can I report it?",
+    "A trivia question was not generated based on the provided topic. Where can I report it?",
+    "I found a bug in the application. Where can I report it?",
+    "How is the score decided?",
+    "How does this work?",
+    "What LLM is used to generate questions?",
+    "How do you ensure the trivia questions won't repeat?",
+    "What languages are supported?",
+    "How do you ensure people won't request illegal topics?",
+    "Is this safe for children? Is there a minimum age?",
+    "What is the purpose of this game?",
+    "How can I change my username?",
+    "What's on the authors roadmap regarding this project?",
+    "Where can I access the trivia game?",
+    "Does it matter how fast/quick I provide a response?",
+    "I provided a wrong answer to a trivia question and then I changed my mind. How can I update my answer?",
+    "If I don't know the answer to a trivia question, should I still choose an option or is better not to?"
+]
+
+
 db = database('uplayers.db')
 players = db.t.players
 if players not in db.t:
@@ -120,7 +154,6 @@ class TaskManager:
         self.topics_lock = asyncio.Lock()
         self.answers_lock = asyncio.Lock()
         self.past_topic = None
-        self.past_topics = []
         self.executors = [concurrent.futures.ThreadPoolExecutor(max_workers=1) for _ in range(num_executors)]
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
@@ -234,7 +267,6 @@ class TaskManager:
                 self.reset()
             self.task = asyncio.create_task(self.count())
             self.past_topic = self.current_topic
-            self.past_topics.append(self.current_topic)
             await self.consume_successful_topic()
 
     async def remove_failed_topic(self, topic: Topic):
@@ -661,13 +693,9 @@ async def post(session, topic: str, points: int):
                 add_toast(session, f"Topic '{topic}' already exists")
                 return bid_form()
 
-        if len(task_manager.past_topics) > 0:
-            if len(task_manager.past_topics) > 5:
-                task_manager.past_topics = task_manager.past_topics[::-5]
-            for t in task_manager.past_topics:
-                if similar(t.topic, topic) >= 0.7:
-                    add_toast(session, f"Topic '{topic}' already exists")
-                    return bid_form()
+        if similar(t.topic, task_manager.past_topic.topic) >= 0.7:
+            add_toast(session, f"Topic '{topic}' already exists")
+            return bid_form()
 
     if 'session_id' in session:
         user_id = session['session_id']
