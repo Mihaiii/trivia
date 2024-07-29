@@ -10,6 +10,7 @@ import threading
 from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
+from scripts import ThemeSwitch
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -81,37 +82,12 @@ css = [
     Style('.middle-panel { display: flex; flex-direction: column; flex: 1; padding: 10px; flex: 1; transition: all 0.3s ease-in-out; flex-basis: 60%;}'),
     Style('.login { margin-bottom: 10px; max-width: fit-content; margin-left: auto; margin-right: auto;}'),
     Style('.primary:active { background-color: #0056b3; }'),
+    Style('.last-tab  { display: flex; align-items: center;  justify-content: center;}'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
     Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; }')
 ]
 
-scripts = [
-    Script("""
-           document.addEventListener("DOMContentLoaded", function(event) {            
-                function getColorSchemePreference() {
-                    ls = localStorage.getItem("triviaTheme")
-                    if (ls) {
-                        return ls;
-                    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                        return 'dark';
-                    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-                        return 'light';
-                    } else {
-                        return 'light';
-                    }
-                }
-                me("html").attribute("data-theme", getColorSchemePreference())
-                me("#theme-toggle").on("click", _ => 
-                {
-                    newTheme = me("html").attribute("data-theme") === "dark" ? "light" : "dark"
-                    me("html").attribute("data-theme", newTheme)
-                    localStorage.setItem("triviaTheme", newTheme)
-                }
-                );
-            });
-            
-        """)
-]
+
 #TODO: remove the app before making the repo public and properly handle the info, ofc
 huggingface_client = HuggingFaceClient(
     client_id="f7542bbf-4343-482d-8b58-9343f4f9e3ca",
@@ -406,7 +382,7 @@ async def app_startup():
         asyncio.create_task(task_manager.run_executor(i))
 
 
-app = FastHTML(hdrs=(css, scripts), ws_hdr=True, on_startup=[app_startup], debug=True)
+app = FastHTML(hdrs=(css, ThemeSwitch()), ws_hdr=True, on_startup=[app_startup], debug=True)
 rt = app.route
 setup_toasts(app)
 
@@ -570,8 +546,11 @@ def get(app, session, code: str = None):
 tabs = Nav(
     A("PLAY", href="/", role="button", cls="secondary"),
     A("STATS", href="/stats", role="button", cls="secondary"),
-    A("FAQ", href="/faq", role="button", cls="secondary"),
-    Button("theme", id="theme-toggle", cls="secondary"),
+    Div(
+        A("FAQ", href="/faq", role="button", cls="secondary"),
+        Div(id="theme-toggle"),
+        cls="last-tab"
+    ),
     cls="tabs"
 )
     
