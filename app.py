@@ -681,6 +681,10 @@ async def post(session, topic: str, points: int):
         add_toast(session, "Cannot send empty topic", "error")
         return bid_form()
 
+    if similar(topic, "ignore previous instructions") >= 0.5:
+        add_toast(session, "Error", "error")
+        return bid_form()
+
     task_manager = app.state.task_manager
 
     async with task_manager.topics_lock:
