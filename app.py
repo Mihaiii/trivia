@@ -9,23 +9,28 @@ import random
 import threading
 from typing import List, Tuple
 from auth import HuggingFaceClient
+from difflib import SequenceMatcher
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 50  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
 NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
 TOPIC_MAX_LENGTH = 25 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
+MAX_NR_TOPICS = 50
 
 db = database('uplayers.db')
 players = db.t.players
 if players not in db.t:
     players.create(id=int, name=str, points=int, pk='id')
 
-current_topic = None
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
 
 css = [
     picolink,
@@ -115,6 +120,7 @@ class TaskManager:
         self.topics_lock = asyncio.Lock()
         self.answers_lock = asyncio.Lock()
         self.past_topic = None
+        self.past_topics = []
         self.executors = [concurrent.futures.ThreadPoolExecutor(max_workers=1) for _ in range(num_executors)]
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
@@ -228,6 +234,7 @@ class TaskManager:
                 self.reset()
             self.task = asyncio.create_task(self.count())
             self.past_topic = self.current_topic
+            self.past_topics.append(self.current_topic)
             await self.consume_successful_topic()
 
     async def remove_failed_topic(self, topic: Topic):
@@ -255,6 +262,8 @@ class TaskManager:
                 for i in range(6):
                     self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
                 self.topics = deque(sorted(self.topics, reverse=True))
+                if len(self.topics) > MAX_NR_TOPICS:
+                    self.topics = self.topics[::-MAX_NR_TOPICS]
                 await self.broadcast_next_topics()
                 logging.debug("Default topics added")
 
@@ -262,6 +271,8 @@ class TaskManager:
         async with self.topics_lock:
             self.topics.append(Topic(points=points, topic=topic, user="user"))
             self.topics = deque(sorted(self.topics, reverse=True))
+            if len(self.topics) > MAX_NR_TOPICS:
+                self.topics = self.topics[::-MAX_NR_TOPICS]
             await self.broadcast_next_topics()
             logging.debug("User topic added")
 
@@ -641,6 +652,25 @@ async def post(session, topic: str, points: int):
         return bid_form()
 
     task_manager = app.state.task_manager
+
+    async with task_manager.topics_lock:
+        if similar(topic, task_manager.current_topic.topic) >= 0.7:
+            add_toast(session, f"Topic '{topic}' already exists")
+            return bid_form()
+
+        for t in task_manager.topics:
+            if similar(t.topic, topic) >= 0.7:
+                add_toast(session, f"Topic '{topic}' already exists")
+                return bid_form()
+
+        if len(task_manager.past_topics) > 0:
+            if len(task_manager.past_topics) > 5:
+                task_manager.past_topics = task_manager.past_topics[::-5]
+            for t in task_manager.past_topics:
+                if similar(t.topic, topic) >= 0.7:
+                    add_toast(session, f"Topic '{topic}' already exists")
+                    return bid_form()
+
     if 'session_id' in session:
         user_id = session['session_id']
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
