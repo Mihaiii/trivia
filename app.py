@@ -14,7 +14,7 @@ from scripts import ThemeSwitch
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 5  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 50  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -22,7 +22,7 @@ NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL L
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
 TOPIC_MAX_LENGTH = 25 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 MAX_NR_TOPICS = 50
-DUPLICATE_TOPIC_THRESHOLD = 0.7
+DUPLICATE_TOPIC_THRESHOLD = 0.9
 
 db = database('uplayers.db')
 players = db.t.players
@@ -489,7 +489,7 @@ def unselectedOptions():
     )
 
 def bid_form():
-    return Div(Form(Input(type='text', name='topic', placeholder="frieren borgar", maxlength=f"{TOPIC_MAX_LENGTH}", required=True),
+    return Div(Form(Input(type='text', name='topic', placeholder="frieren borgar", maxlength=f"{TOPIC_MAX_LENGTH}", required=True, autofocus=True),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS, required=True),
                  Button('BID', cls='primary', style='width: 100%;'),
                  action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
@@ -638,10 +638,11 @@ async def post(session, topic: str, points: int):
             if similar(t.topic, topic) >= DUPLICATE_TOPIC_THRESHOLD:
                 add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
                 return bid_form()
-
-        if similar(t.topic, task_manager.past_topic.topic) >= DUPLICATE_TOPIC_THRESHOLD:
-            add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
-            return bid_form()
+            
+        if task_manager.past_topic:
+            if similar(t.topic, task_manager.past_topic.topic) >= DUPLICATE_TOPIC_THRESHOLD:
+                add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
+                return bid_form()
 
     if 'session_id' in session:
         user_id = session['session_id']
