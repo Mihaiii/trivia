@@ -148,7 +148,7 @@ class TaskManager:
                                 content["option B"],
                                 content["option C"],
                                 content["option D"],
-                                content["correct answer"])
+                                content["correct answer"].replace(" ", "_"))
                     topic.status = "successful"
             except Exception as e:
                 error_message = str(e)
