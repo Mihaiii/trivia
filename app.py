@@ -503,7 +503,7 @@ def bid_form():
     return Div(Form(Input(type='text', name='topic', placeholder="frieren borgar", maxlength=f"{TOPIC_MAX_LENGTH}", required=True, autofocus=True),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS, required=True),
                  Button('BID', cls='primary', style='width: 100%;'),
-                 action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
+                 action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;', id='bid_form'), hx_swap="outerHTML"
             )
 
 
@@ -593,7 +593,17 @@ async def get(session, app, request):
         cls="container",
         hx_ext='ws', ws_connect='/ws'
     )
-    return container
+    container_wrapper = Div(container,
+        Script("""
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('bid_form').submit();
+            }
+        });
+        """)
+    )
+    return container_wrapper
 
 @rt('/stats')
 async def get(session, app, request):
