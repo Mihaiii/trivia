@@ -622,7 +622,7 @@ async def post(session, topic: str, points: int):
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return bid_form()
     print(f"Topic: {topic}, points: {points}")
-    
+    topic = topic.strip()
     if points < BID_MIN_POINTS:
         add_toast(session, f"Bid at least {BID_MIN_POINTS} points", "error")
         return bid_form()
