@@ -1,2 +1,2 @@
-python-fasthtml==v0.2.1
+python-fasthtml==0.2.1
 requests==2.27.1
