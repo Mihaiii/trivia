@@ -135,15 +135,19 @@ class TaskManager:
         await asyncio.sleep(1)
         should_consume = False
         async with self.topics_lock:
-            try:
-                if topic.status == "pending":
-                    llm_resp = await llm_req.topic_check(topic.topic)
-                    if llm_resp == "Yes":
-                        topic.status = "computing"
-                    else:
-                        topic.status = "failed"
-                elif topic.status == "computing":
-                    content = await llm_req.generate_question(topic.topic)
+            clone_topic = topic.clone()
+        try:
+            if clone_topic.status == "pending":
+                llm_resp = await llm_req.topic_check(clone_topic.topic)
+                if llm_resp == "Yes":
+                    status = "computing"
+                else:
+                    status = "failed"
+                async with self.topics_lock:
+                    topic.status = status
+            elif clone_topic.status == "computing":
+                content = await llm_req.generate_question(clone_topic.topic)
+                async with self.topics_lock:
                     topic.question = Question(content["trivia question"],
                                 content["option A"],
                                 content["option B"],
@@ -151,13 +155,14 @@ class TaskManager:
                                 content["option D"],
                                 content["correct answer"].replace(" ", "_"))
                     topic.status = "successful"
-            except Exception as e:
-                error_message = str(e)
-                print("llm error: " + error_message)
+        except Exception as e:
+            error_message = str(e)
+            print("llm error: " + error_message)
+            async with self.topics_lock:
                 topic.status = "failed"
 
-            await self.broadcast_next_topics()
-
+        await self.broadcast_next_topics()
+        async with self.topics_lock:
             if topic.status == "successful" and self.current_topic is None:
                 should_consume = True
             if topic.status == "failed":
