@@ -1,6 +1,7 @@
 import json
 import httpx
 import logging
+import random
 
 timeout = httpx.Timeout(300.0)
 
@@ -81,13 +82,15 @@ headers = {
 def _add_special_tokens(raw_prompt):
     return f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{raw_prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
 
-
+with open('topics.json', 'r') as file:
+    example_topics = json.load(file)
+    
 async def gen_topics():
-    #TODO: take examples from file
+    random_values = random.sample(example_topics['topics'], 2)
     g_top = {
         "temperature": 1.3,
         "n_predict": 700,
-        "prompt": _add_special_tokens(GENERATE_TOPICS + "naruto, coca-cola"),
+        "prompt": _add_special_tokens(GENERATE_TOPICS + ", ".join(random_values)),
         "json_schema": TOPICS_JSON_SCHEMA
     }
     async with httpx.AsyncClient() as client:
