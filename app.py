@@ -593,8 +593,16 @@ async def get(session, app, request):
         cls="container",
         hx_ext='ws', ws_connect='/ws'
     )
+    
     container_wrapper = Div(container, enterToBid())
-    return container_wrapper
+    
+    base_link = redirect_uri.split('/')[0]
+    
+    if request.url.path != base_link:
+        add_toast(session, f"Please use the following link: {base_link}", "info")
+        return container wrapper
+    else
+        return container_wrapper
 
 @rt('/stats')
 async def get(session, app, request):
