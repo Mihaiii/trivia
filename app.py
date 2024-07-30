@@ -143,12 +143,12 @@ class TaskManager:
                         topic.status = "failed"
                 elif topic.status == "computing":
                     content = await llm_req.generate_question(topic.topic)
-                    topic.question = Question(content["trivia_question"],
+                    topic.question = Question(content["trivia question"],
                                 content["option A"],
                                 content["option B"],
                                 content["option C"],
                                 content["option D"],
-                                content["correct_answer"])
+                                content["correct answer"])
                     topic.status = "successful"
             except Exception as e:
                 error_message = str(e)
