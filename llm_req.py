@@ -23,7 +23,7 @@ TOPICS_JSON_SCHEMA = {
 QUESTION_JSON_SCHEMA = {
   "type": "object",
   "properties": {
-    "trivia_question": {
+    "trivia question": {
       "type": "string",
       "description": "The trivia question"
     },
@@ -43,13 +43,13 @@ QUESTION_JSON_SCHEMA = {
       "type": "string",
       "description": "Option D for the question"
     },
-    "correct_answer": {
+    "correct answer": {
       "type": "string",
       "description": "The correct answer for the question",
       "enum": ["option A", "option B", "option C", "option D"]
     }
   },
-  "required": ["trivia_question", "option A", "option B", "option C", "option D", "correct_answer"]
+  "required": ["trivia question", "option A", "option B", "option C", "option D", "correct answer"]
 }
 
 QUESTION_CHECK = ("You are an assistant that evaluates whether a given topic is appropriate for generating trivia "
