@@ -135,7 +135,7 @@ class TaskManager:
         await asyncio.sleep(1)
         should_consume = False
         async with self.topics_lock:
-            clone_topic = topic.clone()
+            clone_topic = topic.copy()
         try:
             if clone_topic.status == "pending":
                 llm_resp = await llm_req.topic_check(clone_topic.topic)
