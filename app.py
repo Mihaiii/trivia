@@ -372,17 +372,17 @@ async def post(session, app):
     
     async with task_manager.answers_lock:
         task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
-        task_manager.current_topic.answers.append((session['session_id'], "A"))
+        task_manager.current_topic.answers.append((session['session_id'], "option_A"))
         
     div_a = Div(
         Button(task_manager.current_topic.question.option_A, cls="primarly", hx_post="/choose_option_A",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
@@ -402,17 +402,17 @@ async def post(session):
     
     async with task_manager.answers_lock:
         task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
-        task_manager.current_topic.answers.append((session['session_id'], "B"))
+        task_manager.current_topic.answers.append((session['session_id'], "option_B"))
     
     div_b = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="primarly", hx_post="/choose_option_B",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
@@ -432,17 +432,17 @@ async def post(session, app):
     
     async with task_manager.answers_lock:
         task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
-        task_manager.current_topic.answers.append((session['session_id'], "C"))
+        task_manager.current_topic.answers.append((session['session_id'], "option_C"))
         
     div_c = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_C, cls="primarly", hx_post="/choose_option_C",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_D, cls="secondary", hx_post="/choose_option_D",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
@@ -462,17 +462,17 @@ async def post(session):
     
     async with task_manager.answers_lock:
         task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
-        task_manager.current_topic.answers.append((session['session_id'], "D"))
+        task_manager.current_topic.answers.append((session['session_id'], "option_D"))
         
     div_d = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_C, cls="secondary", hx_post="/choose_option_C",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         Button(task_manager.current_topic.question.option_D, cls="primarly", hx_post="/choose_option_D",
-               hx_target="#question_options", hx_swap="outerHTML", disabled=True),
+               hx_target="#question_options", disabled=True),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
