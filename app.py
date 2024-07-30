@@ -11,6 +11,7 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch
+from llm_req import topic_check, generate_question
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -132,18 +133,24 @@ class TaskManager:
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
-            # HERE WE SIMULATE THE LLM CALLS AND STATUS RESPONSES. FOR THE MOMENT, WE FAKE THE PROCESS AND MOVE EVERYTHING IN SUCCESSFUL STATUS.
-            if topic.status == "pending":
-                topic.status = random.choice(["computing"])  # TODO: ["computing", "failed"]
-            elif topic.status == "computing":
-                # SIMULATE A LLM GENERATED QUESTION WITH OPTIONS AND A CORRECT ANSWER
-                topic.question = Question(f"Question title for topic: {topic.topic}",
-                                          f"option A for {topic.topic}",
-                                          f"option B for {topic.topic}",
-                                          f"option C for {topic.topic}",
-                                          f"option D for {topic.topic}",
-                                          "C")
-                topic.status = random.choice(["successful"])  # TODO: ["successful", "failed"]
+            try:
+                if topic.status == "pending":
+                    llm_resp = topic_check(topic.topic)
+                    if llm_resp == "Yes":
+                        topic.status = "computing"
+                    else:
+                        topic.status = "failed"
+                elif topic.status == "computing":
+                    content = generate_question(topic.topic)
+                    topic.question = Question(content["title"],
+                                content["option_A"],
+                                content["option_B"],
+                                content["option_C"],
+                                content["option_D"],
+                                content["correct_answer"])
+                    topic.status = "successful"
+            except:
+                topic.status = "failed"
 
             await self.broadcast_next_topics()
 
@@ -151,7 +158,6 @@ class TaskManager:
                 should_consume = True
             if topic.status == "failed":
                 await asyncio.create_task(self.remove_failed_topic(topic))
-            # logging.debug(f"Topic updated: {topic.topic} to {topic.status}")
         if should_consume:
             if self.task:
                 self.task.cancel()
