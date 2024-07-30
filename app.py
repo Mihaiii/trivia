@@ -219,10 +219,9 @@ class TaskManager:
 
     async def remove_failed_topic(self, topic: Topic):
         await asyncio.sleep(KEEP_FAILED_TOPIC_SEC)
-        async with self.topics_lock:
-            if topic in self.topics and topic.status == "failed":
-                self.topics.remove(topic)
-                await self.broadcast_next_topics()
+        if topic in self.topics and topic.status == "failed":
+            self.topics.remove(topic)
+            await self.broadcast_next_topics()
         logging.debug(f"Failed topic removed: {topic.topic}")
 
     async def monitor_topics(self):
