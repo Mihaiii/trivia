@@ -60,14 +60,14 @@ QUESTION_CHECK = ("You are an assistant that evaluates whether a given topic is 
                   "If at least one check fails, then the topic is not appropiate and then provided answer is 'No'"
                   "The topic is: ")
 
-QUESTION_PROMPT = (f""" Let's play a trivia game! Given a topic, provide a question that tests user's knowledge of that topic. Also provide 4 possible answers to the question. Only one answer must be the correct one, but the other 3 should be in that area. Make the question fun and easy in a sense that people that aren't expert in that domain could know the answer. If the topic constrains the question to not be easy, offer context and hints in the question text.
+QUESTION_PROMPT = (f"""Let's play a trivia game! Given a topic, provide an easy question that tests user's knowledge of that topic. Also provide 4 possible answers to the question. Only one answer must be the correct one, but the other 3 should be in that area. Make the question fun and easy in a sense that people that aren't expert in that domain could know the answer. If the topic constrains the question to not be easy, offer context and hints in the question text.
 
 Follow this JSON schema when providing the answer:
 
 {QUESTION_JSON_SCHEMA}
 """)
 
-GENERATE_TOPICS = """ Generate 6 short trivia topics without any details or answers. Make them diverse and you can also choose niche topics. Respond with a list of string that can be parsed. Nothing more. Here are some examples of good topics: """
+GENERATE_TOPICS = """ Generate 6 short trivia topics without any details or answers. Make them diverse. Respond with a list of string that can be parsed. Nothing more. Here are some examples of good topics: """
 
 
 URL = "http://127.0.0.1:8000/completion"
