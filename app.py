@@ -5,7 +5,6 @@ from collections import deque
 from dataclasses import dataclass, field
 import concurrent.futures
 import logging
-import random
 import threading
 from typing import List, Tuple
 from auth import HuggingFaceClient
@@ -21,7 +20,7 @@ MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
 NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
 BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
-TOPIC_MAX_LENGTH = 25 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
+TOPIC_MAX_LENGTH = 25  # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 MAX_NR_TOPICS = 50
 DUPLICATE_TOPIC_THRESHOLD = 0.9
 
@@ -257,7 +256,7 @@ class TaskManager:
             if len(self.topics) > MAX_NR_TOPICS:
                 self.topics = self.topics[::-MAX_NR_TOPICS]
             await self.broadcast_next_topics()
-            logging.debug("User topic added")
+            logging.debug(f"User topic: {topic} added")
 
     async def broadcast_next_topics(self, client=None):
         next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
@@ -318,8 +317,8 @@ class TaskManager:
                                    Div(
                                         B("Winners:"),
                                         Table(*[Tr(Td(winner), Td(f"{(len(self.past_topic.winners) - self.past_topic.winners.index(winner)) * 10} pts")) for winner in self.past_topic.winners]),
-                                   ),
-                                   cls="past-card")
+                                  ),
+                                  cls="past-card")
 
             await self.send_to_clients(Div(past_topic_html, id="past_topic"), client)
 
@@ -365,7 +364,7 @@ setup_toasts(app)
 
 @rt('/choose_option_A')
 async def post(session, app):
-    if('session_id' not in session):
+    if 'session_id' not in session:
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
@@ -395,7 +394,7 @@ async def post(session, app):
 
 @rt('/choose_option_B')
 async def post(session):
-    if('session_id' not in session):
+    if 'session_id' not in session:
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
@@ -425,7 +424,7 @@ async def post(session):
 
 @rt('/choose_option_C')
 async def post(session, app):
-    if('session_id' not in session):
+    if 'session_id' not in session:
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
@@ -435,7 +434,7 @@ async def post(session, app):
         task_manager.current_topic.answers = [a for a in task_manager.current_topic.answers if a[0] != session['session_id']]
         task_manager.current_topic.answers.append((session['session_id'], "C"))
         
-    div_c =  Div(
+    div_c = Div(
         Button(task_manager.current_topic.question.option_A, cls="secondary", hx_post="/choose_option_A",
                hx_target="#question_options", hx_swap="outerHTML", disabled=True),
         Button(task_manager.current_topic.question.option_B, cls="secondary", hx_post="/choose_option_B",
@@ -455,7 +454,7 @@ async def post(session, app):
 
 @rt('/choose_option_D')
 async def post(session):
-    if('session_id' not in session):
+    if 'session_id' not in session:
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return unselectedOptions()
     
@@ -482,6 +481,7 @@ async def post(session):
     for client in task_manager.clients[session['session_id']]:
         await task_manager.send_to_clients(div_d, client)
 
+
 def unselectedOptions():
     task_manager = app.state.task_manager
     return Div(
@@ -498,12 +498,14 @@ def unselectedOptions():
         id="question_options"
     )
 
+
 def bid_form():
     return Div(Form(Input(type='text', name='topic', placeholder="frieren borgar", maxlength=f"{TOPIC_MAX_LENGTH}", required=True, autofocus=True),
                  Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS, required=True),
                  Button('BID', cls='primary', style='width: 100%;'),
                  action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;'), hx_swap="outerHTML"
             )
+
 
 @rt("/auth/callback")
 def get(app, session, code: str = None):
@@ -519,6 +521,7 @@ def get(app, session, code: str = None):
     logging.info(f"Client connected: {user_id}")
     return RedirectResponse(url="/")
 
+
 tabs = Nav(
     A("PLAY", href="/", role="button", cls="secondary"),
     A("STATS", href="/stats", role="button", cls="secondary"),
@@ -529,7 +532,8 @@ tabs = Nav(
     ),
     cls="tabs"
 )
-    
+
+
 @rt('/')
 async def get(session, app, request):
     task_manager = app.state.task_manager
@@ -599,7 +603,7 @@ async def get(session, app, request):
     with task_manager.clients_lock:
         c = [c for c in task_manager.clients if c != "unassigned_clients"]
         
-    main_content =  Div(
+    main_content = Div(
         Div(H1("Logged in users (" + str(len(c)) + "):"), Div(", ".join(c))),
         Div(H1("Leaderboard"), Table(Tr(Th(B('HuggingFace Username')), Th(B("Points"))), *cells))
     )
@@ -613,13 +617,12 @@ async def get(session, app, request):
 async def get(session, app, request):
     return Div(
         tabs,
-        Iframe(src="https://mihaiii.github.io/semantic-autocomplete/", style="height: 130vh; width: 100%;"),
-        # cls="container"
+        Iframe(src="https://mihaiii.github.io/semantic-autocomplete/", style="height: 130vh; width: 100%;")
     )
 
 @rt("/bid")
 async def post(session, topic: str, points: int):
-    if('session_id' not in session):
+    if 'session_id' not in session:
         add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
         return bid_form()
     print(f"Topic: {topic}, points: {points}")
