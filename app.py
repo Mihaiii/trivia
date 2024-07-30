@@ -604,7 +604,7 @@ async def get(session, app, request):
 async def get(session, app, request):
     return Div(
         tabs,
-        Div("not yet implemented"),
+        Iframe(src="https://mihaiii.github.io/semantic-autocomplete/"),
         cls="container"
     )
 
@@ -703,6 +703,3 @@ async def on_disconnect(send, session):
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
 async def ws(send):
     pass
-
-
-run_uv()
