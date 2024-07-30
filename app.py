@@ -606,7 +606,7 @@ async def get(session, app, request):
     if base_link not in request.url.path:
         add_toast(session, f"Please use the following link: {base_link}", "info")
         
-    return container wrapper
+    return container_wrapper
 
 @rt('/stats')
 async def get(session, app, request):
