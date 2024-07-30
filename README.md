@@ -36,7 +36,6 @@ To run the app locally, follow these steps:
    ```
    pip install -r requirements.txt
    ```
-   ```
 
 3. **Run the Server**:
    Start the application server:
