@@ -6,7 +6,7 @@ ENTRYPOINT ["/bin/sh", "-c"]
 
 WORKDIR llama.cpp
 
-RUN wget -q https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-IQ2_M.gguf
+RUN wget -q https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf
 
 COPY script.sh .
 
