@@ -9,7 +9,7 @@ import threading
 from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
-from scripts import ThemeSwitch, bidToEnter
+from scripts import ThemeSwitch, enterToBid
 import llm_req
 
 logging.basicConfig(level=logging.DEBUG)
@@ -593,7 +593,7 @@ async def get(session, app, request):
         cls="container",
         hx_ext='ws', ws_connect='/ws'
     )
-    container_wrapper = Div(container, bidToEnter())
+    container_wrapper = Div(container, enterToBid())
     return container_wrapper
 
 @rt('/stats')
