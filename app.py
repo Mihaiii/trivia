@@ -206,7 +206,7 @@ class TaskManager:
             current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 0.4):
+            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 1):
                 logging.debug(f"Completing topic: {self.current_topic.topic}")
                 should_consume = True
         if should_consume:
