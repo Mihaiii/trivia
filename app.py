@@ -52,7 +52,7 @@ css = [
     Style('.primary:active { background-color: #0056b3; }'),
     Style('.last-tab  { display: flex; align-items: center;  justify-content: center;}'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
-    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; }')
+    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} }')
 ]
 
 
@@ -577,6 +577,7 @@ async def get(session, app, request):
         Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
+        Div(id="past_topic", cls='past_topic_wrapper'),
         Div(bid_form(), cls='bid_wrapper'),
         cls="middle-panel"
     )
