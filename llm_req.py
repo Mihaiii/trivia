@@ -86,43 +86,52 @@ with open('topics.json', 'r') as file:
     example_topics = json.load(file)
     
 async def gen_topics():
-    random_values = random.sample(example_topics['topics'], 2)
-    g_top = {
-        "temperature": 1.3,
-        "n_predict": 700,
-        "prompt": _add_special_tokens(GENERATE_TOPICS + ", ".join(random_values)),
-        "json_schema": TOPICS_JSON_SCHEMA
-    }
-    async with httpx.AsyncClient() as client:
-        logging.debug(f"gen_topics: {g_top}")
-        response = await client.post(URL, headers=headers, json=g_top, timeout=timeout)
-        logging.debug(response.json())
-        content = response.json()["content"]
-    return json.loads(content)['topics']
+    try:
+        random_values = random.sample(example_topics['topics'], 2)
+        g_top = {
+            "temperature": 1.3,
+            "n_predict": 700,
+            "prompt": _add_special_tokens(GENERATE_TOPICS + ", ".join(random_values)),
+            "json_schema": TOPICS_JSON_SCHEMA
+        }
+        async with httpx.AsyncClient() as client:
+            logging.debug(f"gen_topics: {g_top}")
+            response = await client.post(URL, headers=headers, json=g_top, timeout=timeout)
+            logging.debug(response.json())
+            content = response.json()["content"]
+        return json.loads(content)['topics']
+    except:
+        return ""
     
 async def topic_check(topic):
-    data_q_check = {
-        "temperature": 0,
-        "prompt": _add_special_tokens(QUESTION_CHECK + topic),
-        "grammar": """root ::= ("Yes" | "No")"""
-    }
-    async with httpx.AsyncClient() as client:
-        logging.debug(f"topic_check: {data_q_check}")
-        response = await client.post(URL, headers=headers, json=data_q_check, timeout=timeout)
-        logging.debug(response.json())
-        content = response.json()["content"]
-    return content
+    try:
+        data_q_check = {
+            "temperature": 0,
+            "prompt": _add_special_tokens(QUESTION_CHECK + topic),
+            "grammar": """root ::= ("Yes" | "No")"""
+        }
+        async with httpx.AsyncClient() as client:
+            logging.debug(f"topic_check: {data_q_check}")
+            response = await client.post(URL, headers=headers, json=data_q_check, timeout=timeout)
+            logging.debug(response.json())
+            content = response.json()["content"]
+        return content
+    except:
+        return ""
 
 async def generate_question(topic):
-    data_gen_q = {
-        "n_predict": 2500,
-        "prompt": _add_special_tokens(QUESTION_PROMPT + topic),
-        "json_schema": QUESTION_JSON_SCHEMA
-    }
-    async with httpx.AsyncClient() as client:
-        logging.debug(f"generate_question: {data_gen_q}")
-        response = await client.post(URL, headers=headers, json=data_gen_q, timeout=timeout)
-        logging.debug(response.json())
-        content = response.json()["content"]
-    return json.loads(content)
+    try:
+        data_gen_q = {
+            "n_predict": 2500,
+            "prompt": _add_special_tokens(QUESTION_PROMPT + topic),
+            "json_schema": QUESTION_JSON_SCHEMA
+        }
+        async with httpx.AsyncClient() as client:
+            logging.debug(f"generate_question: {data_gen_q}")
+            response = await client.post(URL, headers=headers, json=data_gen_q, timeout=timeout)
+            logging.debug(response.json())
+            content = response.json()["content"]
+        return json.loads(content)
+    except:
+        return ""
     
