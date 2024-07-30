@@ -572,12 +572,12 @@ async def get(session, app, request):
                 Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()
             )
             , cls='login')
-
+    
     middle_panel = Div(
         Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
-        Div(id="past_topic", cls='past_topic_wrapper'),
+        Div(Div(id="past_topic"), cls='past_topic_wrapper'),
         Div(bid_form(), cls='bid_wrapper'),
         cls="middle-panel"
     )
