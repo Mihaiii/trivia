@@ -57,7 +57,7 @@ css = [
 
 hf_client_id = os.environ.get("HF_CLIENT_ID")
 hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
-redirect_uri = os.environ.get("redirect_uri")
+redirect_uri = os.environ.get("HF_REDIRECT_URI")
 huggingface_client = HuggingFaceClient(
     client_id=hf_client_id,
     client_secret=hf_client_secret,
