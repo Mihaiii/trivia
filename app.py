@@ -249,9 +249,9 @@ class TaskManager:
                     error_message = str(e)
                     logging.debug("Issues when generating default topics: " + error_message)
 
-    async def add_user_topic(self, points: int = 100, topic: str = "example"):
+    async def add_user_topic(self, points, topic, user_id):
         async with self.topics_lock:
-            self.topics.append(Topic(points=points, topic=topic, user="user"))
+            self.topics.append(Topic(points=points, topic=topic, user=user_id))
             self.topics = deque(sorted(self.topics, reverse=True))
             if len(self.topics) > MAX_NR_TOPICS:
                 self.topics = self.topics[::-MAX_NR_TOPICS]
@@ -671,7 +671,7 @@ async def post(session, topic: str, points: int):
             db_player[0]['points'] -= points
             players.update(db_player[0])
 
-            await task_manager.add_user_topic(topic=topic, points=points)
+            await task_manager.add_user_topic(topic=topic, points=points, user_id=user_id)
             elem = Div(user_id + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
 
             for client in task_manager.clients[user_id]:
