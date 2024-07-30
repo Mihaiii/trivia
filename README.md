@@ -40,7 +40,7 @@ To run the app locally, follow these steps:
 3. **Run the Server**:
    Start the application server:
    ```
-   uvicorn app:app
+   uvicorn app:app --port 8000
    ```
 
 4. **Access the Application**:
