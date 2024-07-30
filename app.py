@@ -56,11 +56,13 @@ css = [
 ]
 
 
-#TODO: remove the app before making the repo public and properly handle the info, ofc
+hf_client_id = os.environ.get("HF_CLIENT_ID")
+hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
+redirect_uri = os.environ.get("redirect_uri")
 huggingface_client = HuggingFaceClient(
-    client_id="f7542bbf-4343-482d-8b58-9343f4f9e3ca",
-    client_secret="04f5de00-4158-44e2-a794-443f71586ee1",
-    redirect_uri="http://localhost:8000/auth/callback"
+    client_id=hf_client_id,
+    client_secret=hf_client_secret,
+    redirect_uri=redirect_uri
 )
 
 @dataclass
