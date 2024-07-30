@@ -610,8 +610,8 @@ async def get(session, app, request):
 async def get(session, app, request):
     return Div(
         tabs,
-        Iframe(src="https://mihaiii.github.io/semantic-autocomplete/"),
-        cls="container"
+        Iframe(src="https://mihaiii.github.io/semantic-autocomplete/", style="height: 130vh; width: 100%;"),
+        # cls="container"
     )
 
 @rt("/bid")
