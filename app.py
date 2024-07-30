@@ -358,7 +358,7 @@ async def app_startup():
         asyncio.create_task(task_manager.run_executor(i))
 
 
-app = FastHTML(hdrs=(css, ThemeSwitch()), ws_hdr=True, on_startup=[app_startup], debug=True)
+app = FastHTML(hdrs=(css, ThemeSwitch()), ws_hdr=True, on_startup=[app_startup])
 rt = app.route
 setup_toasts(app)
 
