@@ -98,3 +98,14 @@ me(selector).on("click", _ =>
 
 """ % (buttonClass, sel)
     return Script(src, type='module')
+
+def enterToBid():
+    src = """
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('bid_form').submit();
+            }
+        });
+        """
+    return Script(src)
