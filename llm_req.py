@@ -27,29 +27,29 @@ QUESTION_JSON_SCHEMA = {
       "type": "string",
       "description": "The trivia question"
     },
-    "option_A": {
+    "option A": {
       "type": "string",
       "description": "Option A for the question"
     },
-    "option_B": {
+    "option B": {
       "type": "string",
       "description": "Option B for the question"
     },
-    "option_C": {
+    "option C": {
       "type": "string",
       "description": "Option C for the question"
     },
-    "option_D": {
+    "option D": {
       "type": "string",
       "description": "Option D for the question"
     },
     "correct_answer": {
       "type": "string",
       "description": "The correct answer for the question",
-      "enum": ["option_A", "option_B", "option_C", "option_D"]
+      "enum": ["option A", "option B", "option C", "option D"]
     }
   },
-  "required": ["trivia_question", "option_A", "option_B", "option_C", "option_D", "correct_answer"]
+  "required": ["trivia_question", "option A", "option B", "option C", "option D", "correct_answer"]
 }
 
 QUESTION_CHECK = ("You are an assistant that evaluates whether a given topic is appropriate for generating trivia "

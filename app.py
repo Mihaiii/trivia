@@ -144,10 +144,10 @@ class TaskManager:
                 elif topic.status == "computing":
                     content = await llm_req.generate_question(topic.topic)
                     topic.question = Question(content["trivia_question"],
-                                content["option_A"],
-                                content["option_B"],
-                                content["option_C"],
-                                content["option_D"],
+                                content["option A"],
+                                content["option B"],
+                                content["option C"],
+                                content["option D"],
                                 content["correct_answer"])
                     topic.status = "successful"
             except Exception as e:
@@ -311,7 +311,7 @@ class TaskManager:
                             
     async def broadcast_past_topic(self, client=None):
         if self.past_topic:                
-            ans = getattr(self.past_topic.question, f"option_{self.past_topic.question.correct_answer}")
+            ans = getattr(self.past_topic.question, self.past_topic.question.correct_answer)
             past_topic_html = Div(Div(B("Question:"), P(self.past_topic.question.trivia_question)),
                                    Div(B("Correct answer:"), P(ans)),
                                    Div(
