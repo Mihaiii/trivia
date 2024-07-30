@@ -603,7 +603,7 @@ async def get(session, app, request):
     
     base_link = urlparse(redirect_uri).hostname
     
-    if base_link not in request.url.path:
+    if base_link not in request.url.netloc:
         add_toast(session, f"Please use the following link: {base_link}", "info")
         
     return container_wrapper
