@@ -597,7 +597,7 @@ async def get(session, app, request):
     
     container_wrapper = Div(container, enterToBid())
     
-    base_link = urlparse(url).hostname
+    base_link = urlparse(redirect_uri).hostname
     
     if base_link not in request.url.path:
         add_toast(session, f"Please use the following link: {base_link}", "info")
