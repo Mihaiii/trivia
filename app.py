@@ -486,13 +486,13 @@ def unselectedOptions():
     task_manager = app.state.task_manager
     return Div(
         Button(task_manager.current_topic.question.option_A, cls="primary", hx_post="/choose_option_A",
-                hx_target="#question_options", hx_swap="outerHTML"),
+                hx_target="#question_options"),
         Button(task_manager.current_topic.question.option_B, cls="primary", hx_post="/choose_option_B",
-                hx_target="#question_options", hx_swap="outerHTML"),
+                hx_target="#question_options"),
         Button(task_manager.current_topic.question.option_C, cls="primary", hx_post="/choose_option_C",
-                hx_target="#question_options", hx_swap="outerHTML"),
+                hx_target="#question_options"),
         Button(task_manager.current_topic.question.option_D, cls="primary", hx_post="/choose_option_D",
-                hx_target="#question_options", hx_swap="outerHTML"),
+                hx_target="#question_options"),
         cls="options",
         style="display: flex; flex-direction: column; gap: 10px; ",
         id="question_options"
@@ -567,7 +567,11 @@ async def get(session, app, request):
     if user_id:
         top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
     else:
-        top_right_corner = Div(A(Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()), cls='login')
+        top_right_corner = Div(
+            A(
+                Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()
+            )
+            , cls='login')
 
     middle_panel = Div(
         Div(top_right_corner, cls='login_wrapper'),
