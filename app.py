@@ -52,7 +52,7 @@ css = [
     Style('.primary:active { background-color: #0056b3; }'),
     Style('.last-tab  { display: flex; align-items: center;  justify-content: center;}'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
-    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; }')
+    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} }')
 ]
 
 
@@ -577,11 +577,12 @@ async def get(session, app, request):
                 Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()
             )
             , cls='login')
-
+    
     middle_panel = Div(
         Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
+        Div(Div(id="past_topic"), cls='past_topic_wrapper'),
         Div(bid_form(), cls='bid_wrapper'),
         cls="middle-panel"
     )
