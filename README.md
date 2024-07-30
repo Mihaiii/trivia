@@ -2,8 +2,8 @@
 # Trivia
 
 ## Authors
-- Mihai Chirculescu: [https://github.com/Mihaiii]
-- Mihai Dobrescu: [https://github.com/mihaidobrescu1111]
+- [Mihai Chirculescu](https://github.com/Mihaiii)
+- [Mihai Dobrescu](https://github.com/mihaidobrescu1111)
 
 ## Overview
 This application is designed to manage a real-time interactive experience, allowing users to connect, answer questions, and accumulate points based on correct responses. The system includes a WebSocket-based backend to handle real-time communication and synchronization of state across clients.
