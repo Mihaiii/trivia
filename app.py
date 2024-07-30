@@ -11,6 +11,7 @@ from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
 import llm_req
+from urllib.parse import urlparse
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -596,9 +597,9 @@ async def get(session, app, request):
     
     container_wrapper = Div(container, enterToBid())
     
-    base_link = redirect_uri.split('/')[0]
+    base_link = urlparse(url).hostname
     
-    if request.url.path != base_link:
+    if base_link not in request.url.path:
         add_toast(session, f"Please use the following link: {base_link}", "info")
         return container wrapper
     else
