@@ -104,7 +104,7 @@ def enterToBid():
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
                 event.preventDefault();
-                document.getElementById('bid_form').submit();
+                document.getElementById('bid_btn').click();
             }
         });
         """
