@@ -11,6 +11,8 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch
+import requests
+import json
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -23,6 +25,13 @@ BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN 
 TOPIC_MAX_LENGTH = 25 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 MAX_NR_TOPICS = 50
 DUPLICATE_TOPIC_THRESHOLD = 0.9
+QUESTION_CHECK = ("You are an assistant that evaluates whether a given topic is appropriate for generating trivia "
+                  "questions. Please respond only with 'Yes' or 'No' based on the appropriateness of the topic. "
+                  "The topic is: ")
+QUESTION_PROMPT = ("You are an assistant that specializes in generating trivia questions. Your task is to create "
+                   "engaging and moderately challenging trivia questions focused on a specific topic. The questions "
+                   "should be clear and concise, with one correct answer. Ensure that the questions are not too "
+                   "difficult for the average person. Here is the topic: ")
 
 db = database('uplayers.db')
 players = db.t.players
@@ -132,17 +141,44 @@ class TaskManager:
         await asyncio.sleep(1)  # Simulate processing time
         should_consume = False
         async with self.topics_lock:
+            url = "http://127.0.0.1:8000/completion"
             # HERE WE SIMULATE THE LLM CALLS AND STATUS RESPONSES. FOR THE MOMENT, WE FAKE THE PROCESS AND MOVE EVERYTHING IN SUCCESSFUL STATUS.
             if topic.status == "pending":
-                topic.status = random.choice(["computing"])  # TODO: ["computing", "failed"]
+                # topic.status = random.choice(["computing"])  # TODO: ["computing", "failed"]
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                data = {
+                    "prompt": QUESTION_CHECK + topic.topic
+                }
+                topic_check = requests.post(url, headers=headers, data=json.dumps(data))
+                content = topic_check.json().get("content", "")
+                if content == "Yes":
+                    topic.status = "computing"
+                else:
+                    topic.status = "failed"
             elif topic.status == "computing":
                 # SIMULATE A LLM GENERATED QUESTION WITH OPTIONS AND A CORRECT ANSWER
-                topic.question = Question(f"Question title for topic: {topic.topic}",
-                                          f"option A for {topic.topic}",
-                                          f"option B for {topic.topic}",
-                                          f"option C for {topic.topic}",
-                                          f"option D for {topic.topic}",
-                                          "C")
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                data = {
+                    "prompt": QUESTION_PROMPT + topic.topic
+                }
+                topic_check = requests.post(url, headers=headers, data=json.dumps(data))
+                content = topic_check.json().get("content", "")
+                # topic.question = Question(f"Question title for topic: {topic.topic}",
+                #                           f"option A for {topic.topic}",
+                #                           f"option B for {topic.topic}",
+                #                           f"option C for {topic.topic}",
+                #                           f"option D for {topic.topic}",
+                #                           "C")
+                topic.question = Question(content["title"],
+                                          content["option_A"],
+                                          content["option_B"],
+                                          content["option_C"],
+                                          content["option_D"],
+                                          content["correct_answer"])
                 topic.status = random.choice(["successful"])  # TODO: ["successful", "failed"]
 
             await self.broadcast_next_topics()
