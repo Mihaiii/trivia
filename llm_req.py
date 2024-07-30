@@ -101,7 +101,7 @@ async def gen_topics():
             content = response.json()["content"]
         return json.loads(content)['topics']
     except:
-        return ""
+        return None
     
 async def topic_check(topic):
     try:
@@ -117,7 +117,7 @@ async def topic_check(topic):
             content = response.json()["content"]
         return content
     except:
-        return ""
+        return None
 
 async def generate_question(topic):
     try:
@@ -133,5 +133,5 @@ async def generate_question(topic):
             content = response.json()["content"]
         return json.loads(content)
     except:
-        return ""
+        return None
     
