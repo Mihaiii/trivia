@@ -11,11 +11,11 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch
-from llm_req import topic_check, generate_question
+import llm_req
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 50  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = 17  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
 MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
 MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
@@ -67,7 +67,7 @@ huggingface_client = HuggingFaceClient(
 
 @dataclass
 class Question:
-    title: str
+    trivia_question: str
     option_A: str
     option_B: str
     option_C: str
@@ -129,29 +129,31 @@ class TaskManager:
                 await self.update_status(topic_to_process)
                 async with self.topics_lock:
                     self.executor_tasks[executor_id].remove(topic_to_process)
-            await asyncio.sleep(0.1)  # Avoid busy-waiting
+            await asyncio.sleep(0.1)
 
     async def update_status(self, topic: Topic):
-        await asyncio.sleep(1)  # Simulate processing time
+        await asyncio.sleep(1)
         should_consume = False
         async with self.topics_lock:
             try:
                 if topic.status == "pending":
-                    llm_resp = topic_check(topic.topic)
+                    llm_resp = await llm_req.topic_check(topic.topic)
                     if llm_resp == "Yes":
                         topic.status = "computing"
                     else:
                         topic.status = "failed"
                 elif topic.status == "computing":
-                    content = generate_question(topic.topic)
-                    topic.question = Question(content["title"],
+                    content = await llm_req.generate_question(topic.topic)
+                    topic.question = Question(content["trivia_question"],
                                 content["option_A"],
                                 content["option_B"],
                                 content["option_C"],
                                 content["option_D"],
                                 content["correct_answer"])
                     topic.status = "successful"
-            except:
+            except Exception as e:
+                error_message = str(e)
+                print("llm error: " + error_message)
                 topic.status = "failed"
 
             await self.broadcast_next_topics()
@@ -169,13 +171,10 @@ class TaskManager:
 
     async def consume_successful_topic(self):
         topic = None
-        logging.debug(f"consume_successful_topic before lock")
         async with self.topics_lock:
-            logging.debug(f"consume_successful_topic after lock")
             successful_topics = [t for t in self.topics if t.status == "successful"]
-            # logging.debug(successful_topics)
             if successful_topics:
-                topic = successful_topics[0]  # Get the highest points successful topic
+                topic = successful_topics[0]
                 logging.debug(f"Topic obtained: {topic.topic}")
                 self.topics.remove(topic)
                 self.current_topic = topic
@@ -196,16 +195,14 @@ class TaskManager:
         try:
             await asyncio.sleep(QUESTION_COUNTDOWN_SEC)
             logging.debug(f"{QUESTION_COUNTDOWN_SEC} seconds timeout completed")
-            await self.check_topic_completion()  # Check if the topic should be completed
+            await self.check_topic_completion()
         except asyncio.CancelledError:
             logging.debug("Timeout task cancelled")
-            pass  # Handle cancellation if the task is cancelled
+            pass
 
     async def check_topic_completion(self):
         should_consume = False
-        logging.debug("check_topic_completion before self.topics_lock")
         async with self.topics_lock:
-            logging.debug("check_topic_completion after self.topics_lock")
             current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
@@ -242,11 +239,16 @@ class TaskManager:
     async def add_default_topics(self):
         async with self.topics_lock:
             if len(self.topics) < MAX_NR_TOPICS_FOR_ALLOW_MORE:
-                for i in range(6):
-                    self.topics.append(Topic(0, f"Default Topic {i}", user="[bot]"))
-                self.topics = deque(sorted(self.topics, reverse=True))
-                await self.broadcast_next_topics()
-                logging.debug("Default topics added")
+                try:
+                    topics = await llm_req.gen_topics()
+                    for t in topics:
+                        self.topics.append(Topic(0, t, user="[bot]"))
+                    self.topics = deque(sorted(self.topics, reverse=True))
+                    await self.broadcast_next_topics()
+                    logging.debug("Default topics added")
+                except Exception as e:
+                    error_message = str(e)
+                    logging.debug("Issues when generating default topics: " + error_message)
 
     async def add_user_topic(self, points: int = 100, topic: str = "example"):
         async with self.topics_lock:
@@ -311,7 +313,7 @@ class TaskManager:
     async def broadcast_past_topic(self, client=None):
         if self.past_topic:                
             ans = getattr(self.past_topic.question, f"option_{self.past_topic.question.correct_answer}")
-            past_topic_html = Div(Div(B("Question:"), P(self.past_topic.question.title)),
+            past_topic_html = Div(Div(B("Question:"), P(self.past_topic.question.trivia_question)),
                                    Div(B("Correct answer:"), P(ans)),
                                    Div(
                                         B("Winners:"),
@@ -324,7 +326,7 @@ class TaskManager:
     async def broadcast_current_question(self, client=None):
         current_question_info = Div(
             Div(
-                Div(self.current_topic.question.title, style="font-size: 30px;"),
+                Div(self.current_topic.question.trivia_question, style="font-size: 30px;"),
                 Div(self.current_topic.user, cls="item left"),
                 Div(f"{self.current_topic.points} pts", cls="item right"),
                 cls="card"),
@@ -509,7 +511,6 @@ def get(app, session, code: str = None):
         user_info = huggingface_client.retr_info(code)
     except Exception as e:
         error_message = str(e)
-        print(f"Error occurred: {error_message}")
         return f"An error occurred: {error_message}"
     user_id = user_info.get("preferred_username")    
     if 'session_id' not in session:
@@ -693,7 +694,6 @@ async def on_disconnect(send, session):
     print(len(app.state.task_manager.clients))
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
-        print("I'm inside the lock")
         key_to_remove = None
         if send in task_manager.clients.copy():
             for key, client_set in task_manager.clients.items():
@@ -708,8 +708,6 @@ async def on_disconnect(send, session):
                         
             if session:
                 session['session_id'] = None
-            print("Client was removed and printing len clients")
-            print(len(task_manager.clients))
 
 
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
