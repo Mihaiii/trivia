@@ -120,7 +120,9 @@ css = [
     Style('.primary:active { background-color: #0056b3; }'),
     Style('.last-tab  { display: flex; align-items: center;  justify-content: center;}'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } .trivia-question { font-size: 20px; }}'),
-    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} .trivia-question { font-size: 30px; }}')
+    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} .trivia-question { font-size: 30px; }}'),
+    Style('@media (max-width: 430px) { #how-to-play { font-size: 8px; height: 49.6px; } #stats { height: 49.6px; } }'),
+    Style('@media (min-width: 431px) { #play { width: 152.27px; } }')
 ]
 
 
@@ -614,8 +616,8 @@ def get(app, session, code: str = None):
 
 
 tabs = Nav(
-    Div(A("PLAY", href="/", role="button", cls="secondary", style="width: 152.27px;")),
-    A("STATS", href="/stats", role="button", cls="secondary"),
+    Div(A("PLAY", href="/", role="button", cls="secondary", id="play")),
+    A("STATS", href="/stats", role="button", cls="secondary", id="stats"),
     Div(
         A("FAQ", href="/faq", role="button", cls="secondary"),
         Div(id="theme-toggle"),
@@ -698,14 +700,14 @@ async def get(session, app, request):
         cls="main"
     )
     main_tabs = Nav(
-        Div(A("HOW TO PLAY?", href="/how-to-play", role="button", cls="secondary")),
-        A("STATS", href="/stats", role="button", cls="secondary"),
+        A("HOW TO PLAY?", href="/how-to-play", role="button", cls="secondary", id="how-to-play"),
+        A("STATS", href="/stats", role="button", cls="secondary", id="stats"),
         Div(
             A("FAQ", href="/faq", role="button", cls="secondary"),
             Div(id="theme-toggle"),
             cls="last-tab"
         ),
-        cls="tabs", style="padding: 20px;"
+        cls="tabs", style="padding: 20px; align-items: center;"
     )
     container = Div(
         main_tabs,
