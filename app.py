@@ -322,7 +322,7 @@ class TaskManager:
     async def broadcast_past_topic(self, client=None):
         if self.past_topic:                
             ans = getattr(self.past_topic.question, self.past_topic.question.correct_answer)
-            past_topic_html = Div(Div(B("Question:"), P(self.past_topic.question.trivia_question)),
+            past_topic_html = Div(Div(B("Previous question:"), P(self.past_topic.question.trivia_question)),
                                    Div(B("Correct answer:"), P(ans)),
                                    Div(
                                         B("Winners:"),
