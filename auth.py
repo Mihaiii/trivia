@@ -1,7 +1,6 @@
 from fasthtml.oauth import _AppClient, WebApplicationClient, GoogleAppClient
 import secrets
 from fastcore.basics import patch
-import os
 
 class HuggingFaceClient(_AppClient):
     "A `WebApplicationClient` for HuggingFace oauth2"
@@ -24,10 +23,3 @@ def login_link_with_state(self:WebApplicationClient, scope=None, state=None):
     if not state: state=self.state
     return self.prepare_request_uri(self.base_url, self.redirect_uri, scope, state)
 
-
-google_client_id = os.environ.get("GOOGLE_CLIENT_ID")
-google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
-google_redirect_uri = "https://mihaiii-trivia.hf.space/google/auth/callback"
-
-GoogleClient = GoogleAppClient(client_id=google_client_id, redirect_uri=google_redirect_uri,
-                               client_secret=google_client_secret)

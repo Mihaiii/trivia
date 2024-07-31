@@ -7,7 +7,7 @@ import concurrent.futures
 import logging
 import threading
 from typing import List, Tuple
-from auth import HuggingFaceClient, GoogleClient
+from auth import HuggingFaceClient, GoogleAppClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
 import llm_req
@@ -69,6 +69,11 @@ if not ALLOW_ANONYMOUS_USERS:
 hf_client_id = os.environ.get("HF_CLIENT_ID")
 hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
 redirect_uri = os.environ.get("HF_REDIRECT_URI")
+
+google_client_id = os.environ.get("GOOGLE_CLIENT_ID")
+google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+google_redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI")
+
 db_directory = os.environ.get("DB_DIRECTORY")
 
 if not db_directory:
@@ -109,6 +114,12 @@ huggingface_client = HuggingFaceClient(
     client_id=hf_client_id,
     client_secret=hf_client_secret,
     redirect_uri=redirect_uri
+)
+
+GoogleClient = GoogleAppClient(
+    client_id=google_client_id,
+    redirect_uri=google_redirect_uri,
+    client_secret=google_client_secret
 )
 
 @dataclass
