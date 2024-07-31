@@ -644,11 +644,15 @@ async def get(session, app, request):
     
         if not db_player:
             current_points = 20
+            prev_user_id = user_id
             user_id += Generator.generate_random_id()
             players.insert({'name': user_id, 'points': current_points})
             query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
             result = db.q(query, (user_id,))
             task_manager.user_dict[user_id] = result[0]['id']
+            session['session_id'] = user_id
+            task_manager.clients[user_id] = task_manager.clients[prev_user_id]
+            del task_manager.clients[prev_user_id]
         else:
             current_points = db_player[0]['points']
 
