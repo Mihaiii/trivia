@@ -10,7 +10,7 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
-import llm_req
+import fake_llm_req as llm_req
 from urllib.parse import urlparse
 import copy
 import random
@@ -60,10 +60,6 @@ if not MAX_NR_TOPICS:
 DUPLICATE_TOPIC_THRESHOLD = os.environ.get("DUPLICATE_TOPIC_THRESHOLD")
 if not DUPLICATE_TOPIC_THRESHOLD:
     DUPLICATE_TOPIC_THRESHOLD = 0.9
-    
-ALLOW_ANONYMOUS_USERS = os.environ.get("ALLOW_ANONYMOUS_USERS")
-if not ALLOW_ANONYMOUS_USERS:
-    ALLOW_ANONYMOUS_USERS = True
     
 hf_client_id = os.environ.get("HF_CLIENT_ID")
 hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
@@ -588,7 +584,7 @@ tabs = Nav(
 async def get(session, app, request):
     task_manager = app.state.task_manager
     
-    if 'session_id' not in session and ALLOW_ANONYMOUS_USERS:
+    if 'session_id' not in session:
         session['session_id'] = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         
     if 'session_id' in session:
