@@ -59,8 +59,8 @@ css = [
     Style('.login { margin-bottom: 10px; max-width: fit-content; margin-left: auto; margin-right: auto;}'),
     Style('.primary:active { background-color: #0056b3; }'),
     Style('.last-tab  { display: flex; align-items: center;  justify-content: center;}'),
-    Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } }'),
-    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} }')
+    Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } .trivia-question { font-size: 20px; }}'),
+    Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} .trivia-question { font-size: 30px; }}')
 ]
 
 
@@ -335,7 +335,7 @@ class TaskManager:
     async def broadcast_current_question(self, client=None):
         current_question_info = Div(
             Div(
-                Div(self.current_topic.question.trivia_question, style="font-size: 30px;"),
+                Div(self.current_topic.question.trivia_question, cls="trivia-question"),
                 Div(self.current_topic.user, cls="item left"),
                 Div(f"{self.current_topic.points} pts", cls="item right"),
                 cls="card"),
@@ -587,7 +587,7 @@ async def get(session, app, request):
         Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
-        Div(Div(id="past_topic"), cls='past_topic_wrapper'),
+        Div(Div(id="past_topic"), cls='past_topic_wrapper', style='padding-top: 10px;'),
         Div(bid_form(), cls='bid_wrapper'),
         cls="middle-panel"
     )
