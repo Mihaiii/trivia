@@ -31,7 +31,7 @@ hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
 redirect_uri = os.environ.get("HF_REDIRECT_URI")
 db_directory = os.environ.get("DB_DIRECTORY")
 if not db_directory:
-    db_directory = "/"
+    db_directory = ""
     
 db = database(f'{db_directory}uplayers.db')
 players = db.t.players
@@ -142,23 +142,23 @@ class TaskManager:
         async with self.topics_lock:
             clone_topic = copy.copy(topic)
         try:
-            if clone_topic.status == "pending":
-                llm_resp = await llm_req.topic_check(clone_topic.topic)
-                if llm_resp == "Yes":
-                    status = "computing"
-                else:
-                    status = "failed"
-                async with self.topics_lock:
-                    topic.status = status
-            elif clone_topic.status == "computing":
-                content = await llm_req.generate_question(clone_topic.topic)
-                async with self.topics_lock:
-                    topic.question = Question(content["trivia question"],
-                                content["option A"],
-                                content["option B"],
-                                content["option C"],
-                                content["option D"],
-                                content["correct answer"].replace(" ", "_"))
+           # if clone_topic.status == "pending":
+           #     llm_resp = await llm_req.topic_check(clone_topic.topic)
+           #     if llm_resp == "Yes":
+           #         status = "computing"
+           #     else:
+           #         status = "failed"
+           #     async with self.topics_lock:
+           #         topic.status = status
+            #elif clone_topic.status == "computing":
+            #    content = await llm_req.generate_question(clone_topic.topic)
+           #     async with self.topics_lock:
+                    topic.question = Question("trivia question",
+                                "option A",
+                                "option B",
+                                "option C",
+                                "option D",
+                                "option_D")
                     topic.status = "successful"
         except Exception as e:
             error_message = str(e)
@@ -249,8 +249,8 @@ class TaskManager:
         async with self.topics_lock:
             if len(self.topics) < MAX_NR_TOPICS_FOR_ALLOW_MORE:
                 try:
-                    topics = await llm_req.gen_topics()
-                    for t in topics:
+                 #   topics = await llm_req.gen_topics()
+                    for t in ["cat"]:
                         self.topics.append(Topic(0, t, user="[bot]"))
                     self.topics = deque(sorted(self.topics, reverse=True))
                     await self.broadcast_next_topics()
@@ -612,8 +612,7 @@ async def get(session, app, request):
     container_wrapper = Div(container, enterToBid())
     
     base_link = urlparse(redirect_uri).hostname
-    
-    if base_link not in request.url.netloc:
+    if base_link and base_link not in request.url.netloc:
         add_toast(session, f"Please use the following link: {base_link}", "info")
         
     return container_wrapper
@@ -638,9 +637,43 @@ async def get(session, app, request):
 
 @rt('/faq')
 async def get(session, app, request):
+    qa = [
+        ("I press the Sign in button, but nothing happens. Why?", 
+        "You're probably accessing https://huggingface.co/spaces/Mihaiii/Trivia. Please use https://mihaiii-trivia.hf.space/ instead."),
+        
+        ("Where can I see the source code?", 
+        "The files for this space can be accessed here: https://huggingface.co/spaces/Mihaiii/Trivia/tree/main. The actual source code for the Trivia game repository is available here: https://github.com/mihaiii/trivia."),
+        
+        ("Why do you need me to sign in? What data do you store?", 
+        "We only store a very basic leaderboard table that tracks how many points each player has."),
+        
+        ("Is this mobile-friendly?", 
+        "Yes."),
+        
+        ("Where can I offer feedback?", 
+        "You can contact us on X: https://x.com/m_chirculescu and https://x.com/mihaidobrescu_."),
+        
+        ("How is the score decided?", 
+        "The score is calculated based on the following formula: 10 + (number of people who answered correctly after you * 10)."),
+        
+        ("If I'm not sure of an answer, should I just guess an option?", 
+        "Yes. You don't lose points for answering incorrectly."),
+        
+        ("A trivia question had an incorrect answer. Where can I report it?", 
+        "We use a language model to generate questions, and sometimes it might provide incorrect information. No need to report it. :)"),
+        
+        ("What languages are supported?", 
+        "Ideally, we accept questions only in English, but we use a language model for checking, and it might not always work perfectly."),
+        
+        ("Is this safe for children?", 
+        "Yes, we review the topics users submit or bid on before displaying or accepting them.")
+    ]
+
+    main_content = Ul(*[Li(Strong(pair[0]), Br(), P(pair[1])) for pair in qa])
     return Div(
         tabs,
-        Iframe(src="https://mihaiii.github.io/semantic-autocomplete/", style="height: 130vh; width: 100%;")
+        main_content,
+        cls="container"
     )
 
 @rt("/bid")
