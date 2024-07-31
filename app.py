@@ -153,12 +153,12 @@ class TaskManager:
             elif clone_topic.status == "computing":
                 content = await llm_req.generate_question(clone_topic.topic)
                 async with self.topics_lock:
-                    topic.question = Question("trivia question",
-                                "option A",
-                                "option B",
-                                "option C",
-                                "option D",
-                                "option_D")
+                    topic.question = Question(content["trivia question"],
+                                content["option A"],
+                                content["option B"],
+                                content["option C"],
+                                content["option D"],
+                                content["correct answer"].replace(" ", "_"))
                     topic.status = "successful"
         except Exception as e:
             error_message = str(e)
@@ -647,7 +647,7 @@ async def get(session, app, request):
         ("Why do you need me to sign in? What data do you store?", 
         "We only store a very basic leaderboard table that tracks how many points each player has."),
         
-        ("Is this mobile-friendly?", 
+        ("Is this website mobile-friendly?", 
         "Yes."),
         
         ("Where can I offer feedback?", 
