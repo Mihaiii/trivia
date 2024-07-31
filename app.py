@@ -610,9 +610,6 @@ tabs = Nav(
 @rt('/')
 async def get(session, app, request):
     task_manager = app.state.task_manager
-    
-    if 'session_id' not in session:
-        session['session_id'] = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         
     if 'session_id' in session:
         user_id = session['session_id']
