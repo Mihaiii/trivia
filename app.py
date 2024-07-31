@@ -658,7 +658,7 @@ async def get(session, app, request):
         top_right_corner = Div(lbtn, google_btn)
     
     middle_panel = Div(
-        Div(, cls='login_wrapper'),
+        Div(top_right_corner, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
         Div(Div(id="past_topic"), cls='past_topic_wrapper', style='padding-top: 10px;'),
