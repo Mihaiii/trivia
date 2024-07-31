@@ -26,7 +26,14 @@ TOPIC_MAX_LENGTH = 25  # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICI
 MAX_NR_TOPICS = 20
 DUPLICATE_TOPIC_THRESHOLD = 0.9
 
-db = database('uplayers.db')
+hf_client_id = os.environ.get("HF_CLIENT_ID")
+hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
+redirect_uri = os.environ.get("HF_REDIRECT_URI")
+db_directory = os.environ.get("DB_DIRECTORY")
+if not db_directory:
+    db_directory = "/"
+    
+db = database(f'{db_directory}uplayers.db')
 players = db.t.players
 if players not in db.t:
     players.create(id=int, name=str, points=int, pk='id')
@@ -57,9 +64,6 @@ css = [
 ]
 
 
-hf_client_id = os.environ.get("HF_CLIENT_ID")
-hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
-redirect_uri = os.environ.get("HF_REDIRECT_URI")
 huggingface_client = HuggingFaceClient(
     client_id=hf_client_id,
     client_secret=hf_client_secret,
