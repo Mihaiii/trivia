@@ -610,27 +610,28 @@ tabs = Nav(
 @rt('/')
 async def get(session, app, request):
     task_manager = app.state.task_manager
-        
+
+    user_id = None
+    
     if 'session_id' in session:
         user_id = session['session_id']
-        
-    with task_manager.clients_lock:
-        if user_id not in task_manager.clients:
-            task_manager.clients[user_id] = set()
+        with task_manager.clients_lock:
+            if user_id not in task_manager.clients:
+                task_manager.clients[user_id] = set()
+
+        if user_id not in task_manager.user_dict:
+            task_manager.user_dict[user_id] = None
+
+        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
     
-    if user_id not in task_manager.user_dict:
-        task_manager.user_dict[user_id] = None
-
-    db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
-
-    if not db_player:
-        current_points = 20
-        players.insert({'name': user_id, 'points': current_points})
-        query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
-        result = db.q(query, (user_id,))
-        task_manager.user_dict[user_id] = result[0]['id']
-    else:
-        current_points = db_player[0]['points']
+        if not db_player:
+            current_points = 20
+            players.insert({'name': user_id, 'points': current_points})
+            query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
+            result = db.q(query, (user_id,))
+            task_manager.user_dict[user_id] = result[0]['id']
+        else:
+            current_points = db_player[0]['points']
 
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
@@ -638,11 +639,12 @@ async def get(session, app, request):
         bid_form(),
         cls='side-panel'
     )
-    
-    top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
     lbtn = Div()
     google_btn = Div()
-    if not request.cookies or 'session_' not in request.cookies:
+    
+    if user_id:
+        top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
+    else:
         lbtn = Div(
             A(
                 Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()
@@ -653,9 +655,10 @@ async def get(session, app, request):
         google_btn = Div(
             A(Img(src="https://developers.google.com/identity/images/btn_google_signin_light_normal_web.png",
                   style="width: 100%; height: auto; display: block;"), href=google_login_link))
+        top_right_corner = Div(lbtn, google_btn)
     
     middle_panel = Div(
-        Div(Div(lbtn, google_btn, top_right_corner), cls='login_wrapper'),
+        Div(, cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
         Div(Div(id="past_topic"), cls='past_topic_wrapper', style='padding-top: 10px;'),
@@ -663,7 +666,7 @@ async def get(session, app, request):
         cls="middle-panel"
     )
     right_panel = Div(
-        Div(lbtn, top_right_corner),
+        Div(top_right_corner),
         Div(id="past_topic"),
         cls="side-panel"
     )
