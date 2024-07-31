@@ -10,26 +10,66 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
-import llm_req
+import fake_llm_req as llm_req
 from urllib.parse import urlparse
 import copy
+import random
+import string
 
 logging.basicConfig(level=logging.DEBUG)
 
-QUESTION_COUNTDOWN_SEC = 22  # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
-KEEP_FAILED_TOPIC_SEC = 5  # NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
-MAX_TOPIC_LENGTH_CHARS = 30  # DON'T ALLOW USER TO WRITE LONG TOPICS
-MAX_NR_TOPICS_FOR_ALLOW_MORE = 6  # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
-NR_TOPICS_TO_BROADCAST = 5  # NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
-BID_MIN_POINTS = 3  # MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
-TOPIC_MAX_LENGTH = 25  # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
-MAX_NR_TOPICS = 20
-DUPLICATE_TOPIC_THRESHOLD = 0.9
+# HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
+QUESTION_COUNTDOWN_SEC = os.environ.get("QUESTION_COUNTDOWN_SEC")
+if not QUESTION_COUNTDOWN_SEC:
+    QUESTION_COUNTDOWN_SEC = 22
+    
+# NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
+KEEP_FAILED_TOPIC_SEC = os.environ.get("KEEP_FAILED_TOPIC_SEC")
+if not KEEP_FAILED_TOPIC_SEC:
+    KEEP_FAILED_TOPIC_SEC = 5
+    
+# DON'T ALLOW USER TO WRITE LONG TOPICS
+MAX_TOPIC_LENGTH_CHARS = os.environ.get("MAX_TOPIC_LENGTH_CHARS")
+if not MAX_TOPIC_LENGTH_CHARS:
+    MAX_TOPIC_LENGTH_CHARS = 30
+    
+# AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
+MAX_NR_TOPICS_FOR_ALLOW_MORE = os.environ.get("MAX_NR_TOPICS_FOR_ALLOW_MORE")
+if not MAX_NR_TOPICS_FOR_ALLOW_MORE:
+    MAX_NR_TOPICS_FOR_ALLOW_MORE = 6
 
+# NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
+NR_TOPICS_TO_BROADCAST = os.environ.get("NR_TOPICS_TO_BROADCAST")
+if not NR_TOPICS_TO_BROADCAST:
+    NR_TOPICS_TO_BROADCAST = 5
+
+# MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
+BID_MIN_POINTS = os.environ.get("BID_MIN_POINTS")
+if not BID_MIN_POINTS:
+    BID_MIN_POINTS = 3
+
+ # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
+TOPIC_MAX_LENGTH = os.environ.get("TOPIC_MAX_LENGTH")
+if not TOPIC_MAX_LENGTH:
+    TOPIC_MAX_LENGTH = 25
+    
+MAX_NR_TOPICS = os.environ.get("MAX_NR_TOPICS")
+if not MAX_NR_TOPICS:
+    MAX_NR_TOPICS = 20
+
+DUPLICATE_TOPIC_THRESHOLD = os.environ.get("DUPLICATE_TOPIC_THRESHOLD")
+if not DUPLICATE_TOPIC_THRESHOLD:
+    DUPLICATE_TOPIC_THRESHOLD = 0.9
+    
+ALLOW_ANONYMOUS_USERS = os.environ.get("ALLOW_ANONYMOUS_USERS")
+if not ALLOW_ANONYMOUS_USERS:
+    ALLOW_ANONYMOUS_USERS = True
+    
 hf_client_id = os.environ.get("HF_CLIENT_ID")
 hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
 redirect_uri = os.environ.get("HF_REDIRECT_URI")
 db_directory = os.environ.get("DB_DIRECTORY")
+
 if not db_directory:
     db_directory = ""
     
@@ -547,26 +587,30 @@ tabs = Nav(
 @rt('/')
 async def get(session, app, request):
     task_manager = app.state.task_manager
-    user_id = None
+    
+    if 'session_id' not in session and ALLOW_ANONYMOUS_USERS:
+        session['session_id'] = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        
     if 'session_id' in session:
         user_id = session['session_id']
-        with task_manager.clients_lock:
-            if user_id not in task_manager.clients:
-                task_manager.clients[user_id] = set()
         
-        if user_id not in task_manager.user_dict:
-            task_manager.user_dict[user_id] = None
+    with task_manager.clients_lock:
+        if user_id not in task_manager.clients:
+            task_manager.clients[user_id] = set()
+    
+    if user_id not in task_manager.user_dict:
+        task_manager.user_dict[user_id] = None
 
-        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
+    db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
 
-        if not db_player:
-            current_points = 20
-            players.insert({'name': user_id, 'points': current_points})
-            query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
-            result = db.q(query, (user_id,))
-            task_manager.user_dict[user_id] = result[0]['id']
-        else:
-            current_points = db_player[0]['points']
+    if not db_player:
+        current_points = 20
+        players.insert({'name': user_id, 'points': current_points})
+        query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
+        result = db.q(query, (user_id,))
+        task_manager.user_dict[user_id] = result[0]['id']
+    else:
+        current_points = db_player[0]['points']
 
     current_question_info = Div(id="current_question_info")
     left_panel = Div(
@@ -574,17 +618,18 @@ async def get(session, app, request):
         bid_form(),
         cls='side-panel'
     )
-    if user_id:
-        top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
-    else:
-        top_right_corner = Div(
+    
+    top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
+    lbtn = Div()
+    if not request.cookies or 'session_' not in request.cookies:
+        lbtn = Div(
             A(
                 Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()
             )
             , cls='login')
     
     middle_panel = Div(
-        Div(top_right_corner, cls='login_wrapper'),
+        Div(Div(lbtn, top_right_corner), cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
         Div(Div(id="past_topic"), cls='past_topic_wrapper', style='padding-top: 10px;'),
@@ -592,7 +637,7 @@ async def get(session, app, request):
         cls="middle-panel"
     )
     right_panel = Div(
-        top_right_corner,
+        Div(lbtn, top_right_corner),
         Div(id="past_topic"),
         cls="side-panel"
     )
@@ -736,7 +781,7 @@ async def post(session, topic: str, points: int):
 async def on_connect(send, ws):
     client_key = "unassigned_clients"
     if ws.scope['session'] and ws.scope['session']['session_id']:
-        client_key = ws.scope['session']['session_id']
+        client_key = ws.scope['session']['session_id']        
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         if client_key not in task_manager.clients:
