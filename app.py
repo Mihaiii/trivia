@@ -142,17 +142,17 @@ class TaskManager:
         async with self.topics_lock:
             clone_topic = copy.copy(topic)
         try:
-           # if clone_topic.status == "pending":
-           #     llm_resp = await llm_req.topic_check(clone_topic.topic)
-           #     if llm_resp == "Yes":
-           #         status = "computing"
-           #     else:
-           #         status = "failed"
-           #     async with self.topics_lock:
-           #         topic.status = status
-            #elif clone_topic.status == "computing":
-            #    content = await llm_req.generate_question(clone_topic.topic)
-           #     async with self.topics_lock:
+            if clone_topic.status == "pending":
+                llm_resp = await llm_req.topic_check(clone_topic.topic)
+                if llm_resp == "Yes":
+                   status = "computing"
+                else:
+                   status = "failed"
+                async with self.topics_lock:
+                    topic.status = status
+            elif clone_topic.status == "computing":
+                content = await llm_req.generate_question(clone_topic.topic)
+                async with self.topics_lock:
                     topic.question = Question("trivia question",
                                 "option A",
                                 "option B",
@@ -249,8 +249,8 @@ class TaskManager:
         async with self.topics_lock:
             if len(self.topics) < MAX_NR_TOPICS_FOR_ALLOW_MORE:
                 try:
-                 #   topics = await llm_req.gen_topics()
-                    for t in ["cat"]:
+                    topics = await llm_req.gen_topics()
+                    for t in topics:
                         self.topics.append(Topic(0, t, user="[bot]"))
                     self.topics = deque(sorted(self.topics, reverse=True))
                     await self.broadcast_next_topics()
