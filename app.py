@@ -1,5 +1,6 @@
 from fasthtml.common import *
 from fasthtml.xtend import picolink
+from fasthtml.oauth import GoogleAppClient
 import asyncio
 from collections import deque
 from dataclasses import dataclass, field
@@ -64,6 +65,11 @@ if not DUPLICATE_TOPIC_THRESHOLD:
 hf_client_id = os.environ.get("HF_CLIENT_ID")
 hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
 redirect_uri = os.environ.get("HF_REDIRECT_URI")
+
+google_client_id = os.environ.get("GOOGLE_CLIENT_ID")
+google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+google_redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI")
+
 db_directory = os.environ.get("DB_DIRECTORY")
 
 if not db_directory:
@@ -104,6 +110,12 @@ huggingface_client = HuggingFaceClient(
     client_id=hf_client_id,
     client_secret=hf_client_secret,
     redirect_uri=redirect_uri
+)
+
+GoogleClient = GoogleAppClient(
+    client_id=google_client_id,
+    redirect_uri=google_redirect_uri,
+    client_secret=google_client_secret
 )
 
 @dataclass
@@ -568,6 +580,21 @@ def get(app, session, code: str = None):
     return RedirectResponse(url="/")
 
 
+@rt("/google/auth/callback")
+def get(app, session, code: str = None):
+    if not code:
+        add_toast(session, "Authentication failed", "error")
+        return RedirectResponse(url="/")
+    GoogleClient.parse_response(code)
+    user_info = GoogleClient.get_info()
+    user_id = user_info.get('name')
+    if 'session_id' not in session:
+        session['session_id'] = user_id
+
+    logging.info(f"Client connected: {user_id}")
+    return RedirectResponse(url="/")
+
+
 tabs = Nav(
     A("PLAY", href="/", role="button", cls="secondary"),
     A("STATS", href="/stats", role="button", cls="secondary"),
@@ -617,15 +644,21 @@ async def get(session, app, request):
     
     top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
     lbtn = Div()
+    google_btn = Div()
     if not request.cookies or 'session_' not in request.cookies:
         lbtn = Div(
             A(
                 Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()
             )
             , cls='login')
+        google_login_link = GoogleClient.prepare_request_uri(GoogleClient.base_url, GoogleClient.redirect_uri,
+                                                             scope='https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid')
+        google_btn = Div(
+            A(Img(src="https://developers.google.com/identity/images/btn_google_signin_light_normal_web.png",
+                  style="width: 100%; height: auto; display: block;"), href=google_login_link))
     
     middle_panel = Div(
-        Div(Div(lbtn, top_right_corner), cls='login_wrapper'),
+        Div(Div(lbtn, google_btn, top_right_corner), cls='login_wrapper'),
         Div(id="countdown"),
         current_question_info,
         Div(Div(id="past_topic"), cls='past_topic_wrapper', style='padding-top: 10px;'),
