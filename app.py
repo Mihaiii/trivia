@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
 import llm_req
 from urllib.parse import urlparse
+import copy
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -135,7 +136,7 @@ class TaskManager:
         await asyncio.sleep(1)
         should_consume = False
         async with self.topics_lock:
-            clone_topic = topic.copy()
+            clone_topic = copy.copy(topic)
         try:
             if clone_topic.status == "pending":
                 llm_resp = await llm_req.topic_check(clone_topic.topic)
