@@ -7,7 +7,7 @@ import concurrent.futures
 import logging
 import threading
 from typing import List, Tuple
-from auth import HuggingFaceClient
+from auth import HuggingFaceClient, GoogleClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
 import llm_req
@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import copy
 import random
 import string
+import fake_llm_req as llm_req
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -571,6 +572,20 @@ def get(app, session, code: str = None):
     logging.info(f"Client connected: {user_id}")
     return RedirectResponse(url="/")
 
+@rt("/google/auth/callback")
+def get(app, session, code: str = None):
+    if not code:
+        add_toast(session, "Authentication failed", "error")
+        return RedirectResponse(url="/")
+    GoogleClient.parse_response(code)
+    user_info = GoogleClient.get_info()
+    user_id = user_info.get('name')
+    if 'session_id' not in session:
+        session['session_id'] = user_id
+
+    logging.info(f"Client connected: {user_id}")
+    return RedirectResponse(url="/")
+
 
 tabs = Nav(
     A("PLAY", href="/", role="button", cls="secondary"),
@@ -621,12 +636,16 @@ async def get(session, app, request):
     
     top_right_corner = Div(user_id + ": " + str(current_points) + " pts", cls='login', id='login_points')
     lbtn = Div()
+    google_btn = Div()
     if not request.cookies or 'session_' not in request.cookies:
         lbtn = Div(
             A(
                 Img(src="https://huggingface.co/datasets/huggingface/badges/resolve/main/sign-in-with-huggingface-xl.svg", id="login-badge"), href=huggingface_client.login_link_with_state()
             )
             , cls='login')
+        google_login_link = GoogleClient.prepare_request_uri(GoogleClient.base_url, GoogleClient.redirect_uri,
+                                                              scope='https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid')
+        google_btn = Div(A(Img(src="https://developers.google.com/identity/images/btn_google_signin_light_normal_web.png", style="width: 100%; height: auto; display: block;"), href=google_login_link))
     
     middle_panel = Div(
         Div(Div(lbtn, top_right_corner), cls='login_wrapper'),
@@ -637,7 +656,7 @@ async def get(session, app, request):
         cls="middle-panel"
     )
     right_panel = Div(
-        Div(lbtn, top_right_corner),
+        Div(lbtn, google_btn, top_right_corner),
         Div(id="past_topic"),
         cls="side-panel"
     )
