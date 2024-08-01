@@ -86,7 +86,7 @@ headers = {
 #    return f"""<start_of_turn>user\n{raw_prompt}<end_of_turn>\n<start_of_turn>model\n"""
 
 def _add_special_tokens(raw_prompt):
-    return f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{raw_prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
+    return f"""<|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{raw_prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
 
 with open('topics.json', 'r') as file:
     example_topics = json.load(file)
