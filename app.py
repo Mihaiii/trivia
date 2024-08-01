@@ -123,8 +123,9 @@ css = [
     Style('.last-tab  { display: flex; align-items: center;  justify-content: center;}'),
     Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } .trivia-question { font-size: 20px; } #login-badge { width: 70%; } .login { display: flex; justify-content: center; align-items: center; height: 100%; } .login a {display: flex; justify-content: center; align-items: center; } #google { display: flex; justify-content: center; align-items: center; }}'),
     Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} .trivia-question { font-size: 30px; }}'),
-    Style('@media (max-width: 430px) { #how-to-play { font-size: 8px; height: 49.6px; } #stats { height: 49.6px; } }'),
-    Style('@media (min-width: 431px) { #play { width: 152.27px; } }')
+    Style('@media (max-width: 430px) { #how-to-play { font-size: 8.5px; height: 49.6px; } #stats { height: 49.6px; } }'),
+    Style('@media (min-width: 431px) { #play { width: 152.27px; } }'),
+    Style('@media (max-width: 347px) { #how-to-play { font-size: 7px; ) }')
 ]
 
 
