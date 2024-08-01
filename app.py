@@ -18,6 +18,8 @@ from id import IDGenerator
 
 logging.basicConfig(level=logging.DEBUG)
 
+SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with Google" or "Sign in with HuggingFace"."""
+
 # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 QUESTION_COUNTDOWN_SEC = os.environ.get("QUESTION_COUNTDOWN_SEC")
 if not QUESTION_COUNTDOWN_SEC:
@@ -443,7 +445,7 @@ setup_toasts(app)
 @rt('/choose_option_A')
 async def post(session, app):
     if 'session_id' not in session:
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
+        add_toast(session, SIGN_IN_TEXT, "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -473,7 +475,7 @@ async def post(session, app):
 @rt('/choose_option_B')
 async def post(session):
     if 'session_id' not in session:
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
+        add_toast(session, SIGN_IN_TEXT, "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -503,7 +505,7 @@ async def post(session):
 @rt('/choose_option_C')
 async def post(session, app):
     if 'session_id' not in session:
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
+        add_toast(session, SIGN_IN_TEXT, "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -533,7 +535,7 @@ async def post(session, app):
 @rt('/choose_option_D')
 async def post(session):
     if 'session_id' not in session:
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
+        add_toast(session, SIGN_IN_TEXT, "error")
         return unselectedOptions()
     
     task_manager = app.state.task_manager
@@ -801,7 +803,7 @@ async def get(session, app, request):
 @rt("/bid")
 async def post(session, topic: str, points: int):
     if 'session_id' not in session:
-        add_toast(session, "Only logged in Huggingface users can play. Press on the right-top corner button to sign in with Huggingface.", "error")
+        add_toast(session, SIGN_IN_TEXT, "error")
         return bid_form()
     print(f"Topic: {topic}, points: {points}")
     topic = topic.strip()
