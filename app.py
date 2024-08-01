@@ -406,7 +406,7 @@ class TaskManager:
                     self.online_users[winner_name]['combo_count'] = 0
                     db_winner['points'] += COMBO_WIN_POINTS
                     
-                    msg = f"Congratulations! You won {COMBO_WIN_POINTS} extra points because you answered {COMBO_CONSECUTIVE_NR_FOR_WIN} questions in a row."
+                    msg = f"Congratulations! You have earned {COMBO_WIN_POINTS} extra points for answering {COMBO_CONSECUTIVE_NR_FOR_WIN} questions correctly in a row."
                     elem = Div(Div(Div(msg, cls=f"toast toast-info"), cls="toast-container"), hx_swap_oob="afterbegin:body")
                     for client in self.online_users[winner_name]['ws_clients']:
                         await self.send_to_clients(elem, client) 
@@ -811,7 +811,7 @@ async def get(session, app, request):
         "You can contact us on X: https://x.com/m_chirculescu and https://x.com/mihaidobrescu_."),
         
         ("How is the score decided?", 
-        "The score is calculated based on the following formula: 10 + (number of people who answered correctly after you * 10)."),
+        f"The score is calculated based on the following formula: 10 + (number of people who answered correctly after you * 10). You'll receive {COMBO_WIN_POINTS} extra points for answering {COMBO_CONSECUTIVE_NR_FOR_WIN} questions correctly in a row."),
         
         ("If I'm not sure of an answer, should I just guess an option?", 
         "Yes. You don't lose points for answering incorrectly."),
