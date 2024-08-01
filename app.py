@@ -180,7 +180,7 @@ class TaskManager:
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
         self.current_timeout_task = None
-        self.online_users = {"unassigned_clients": set()}  # Track connected WebSocket clients
+        self.online_users = {"unassigned_clients": {'ws_clients': set(), 'combo_count': 0}}  # Track connected WebSocket clients
         self.online_users_lock = threading.Lock()
         self.task = None
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -356,17 +356,17 @@ class TaskManager:
 
     async def send_to_clients(self, element, client=None):
         with self.online_users_lock:
-            clients = (self.online_users if client is None else {'dd': [client]}).copy()
-        for client in [item for subset in clients.values() for item in subset]:
+            clients = (self.online_users if client is None else {'unknown': { 'ws_clients': [client]}}).copy()
+        for client in [item for subset in clients.values() for item in subset['ws_clients']]:
             try:
                 await client(element)
             except:
                 with self.online_users_lock:
                     key_to_remove = None
-                    for key, client_set in self.online_users.items():
-                        if client in client_set:
-                            client_set.remove(client)
-                            if len(client_set) == 0:
+                    for key, clients_data in self.online_users.items():
+                        if client in clients_data['ws_clients']:
+                            clients_data['ws_clients'].remove(client)
+                            if len(clients_data['ws_clients']) == 0:
                                 key_to_remove = key
                             logging.debug(f"Removed disconnected client: {client}")
                             break
@@ -387,7 +387,7 @@ class TaskManager:
                 players.update(db_winner)
                 
                 elem = Div(winner_name + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
-                for client in self.online_users[winner_name]:
+                for client in self.online_users[winner_name]['ws_clients']:
                     await self.send_to_clients(elem, client)
                             
     async def broadcast_past_topic(self, client=None):
@@ -469,7 +469,7 @@ async def post(session, app):
         id="question_options"
     )
     
-    for client in task_manager.online_users[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]['ws_clients']:
         await task_manager.send_to_clients(div_a, client)
 
 
@@ -499,7 +499,7 @@ async def post(session):
         id="question_options"
     )
     
-    for client in task_manager.online_users[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]['ws_clients']:
         await task_manager.send_to_clients(div_b, client)
 
 
@@ -529,7 +529,7 @@ async def post(session, app):
         id="question_options"
     )
     
-    for client in task_manager.online_users[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]['ws_clients']:
         await task_manager.send_to_clients(div_c, client)
 
 
@@ -559,7 +559,7 @@ async def post(session):
         id="question_options"
     )
     
-    for client in task_manager.online_users[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]['ws_clients']:
         await task_manager.send_to_clients(div_d, client)
 
 
@@ -640,7 +640,7 @@ async def get(session, app, request):
         user_id = session['session_id']
         with task_manager.online_users_lock:
             if user_id not in task_manager.online_users:
-                task_manager.online_users[user_id] = set()
+                task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0 }
 
         if user_id not in task_manager.all_users:
             task_manager.all_users[user_id] = None
@@ -851,7 +851,7 @@ async def post(session, topic: str, points: int):
             await task_manager.add_user_topic(topic=topic, points=points, user_id=user_id)
             elem = Div(user_id + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
 
-            for client in task_manager.online_users[user_id]:
+            for client in task_manager.online_users[user_id]['ws_clients']:
                 await task_manager.send_to_clients(elem, client)
         else:
             add_toast(session, "Not enough points", "error")
@@ -865,8 +865,8 @@ async def on_connect(send, ws):
     task_manager = app.state.task_manager
     with task_manager.online_users_lock:
         if client_key not in task_manager.online_users:
-            task_manager.online_users[client_key] = set()
-        task_manager.online_users[client_key].add(send)
+            task_manager.online_users[client_key] = { 'ws_clients': set(), 'combo_count': 0 }
+        task_manager.online_users[client_key]['ws_clients'].add(send)
     await task_manager.broadcast_next_topics(send)
     if task_manager.current_topic:
         await task_manager.broadcast_current_question(send)
@@ -879,19 +879,18 @@ async def on_disconnect(send, session):
     task_manager = app.state.task_manager
     with task_manager.online_users_lock:
         key_to_remove = None
-        if send in task_manager.online_users.copy():
-            for key, client_set in task_manager.online_users.items():
-                if send in client_set:
-                    client_set.remove(send)
-                    if len(client_set) == 0:
-                        key_to_remove = key
-                    break
-                
-            if key_to_remove:
-                task_manager.online_users.pop(key_to_remove)
-                        
-            if session:
-                session['session_id'] = None
+        for key, user_data in task_manager.online_users.items():
+            if send in user_data['ws_clients']:
+                user_data['ws_clients'].remove(send)
+                if len(user_data['ws_clients']) == 0:
+                    key_to_remove = key
+                break
+            
+        if key_to_remove:
+            task_manager.online_users.pop(key_to_remove)
+                    
+        if session:
+            session['session_id'] = None
 
 
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
