@@ -13,7 +13,6 @@ from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
 import llm_req
 import copy
-from id import IDGenerator
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -93,9 +92,6 @@ if not COMBO_WIN_POINTS:
     COMBO_WIN_POINTS = 50
 else:
     COMBO_WIN_POINTS = int(os.environ.get("COMBO_WIN_POINTS"))
-
-
-Generator = IDGenerator()
 
 hf_client_id = os.environ.get("HF_CLIENT_ID")
 hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
@@ -680,15 +676,10 @@ async def get(session, app, request):
     
         if not db_player:
             current_points = 20
-            prev_user_id = user_id
-            user_id += Generator.generate_random_id()
             players.insert({'name': user_id, 'points': current_points})
             query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
             result = db.q(query, (user_id,))
             task_manager.all_users[user_id] = result[0]['id']
-            session['session_id'] = user_id
-            task_manager.online_users[user_id] = task_manager.online_users[prev_user_id]
-            del task_manager.online_users[prev_user_id]
         else:
             current_points = db_player[0]['points']
 
