@@ -18,7 +18,7 @@ from id import IDGenerator
 
 logging.basicConfig(level=logging.DEBUG)
 
-SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with Google" or "Sign in with HuggingFace"."""
+SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with HuggingFace" or "Sign in with Google"."""
 
 # HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
 QUESTION_COUNTDOWN_SEC = os.environ.get("QUESTION_COUNTDOWN_SEC")
