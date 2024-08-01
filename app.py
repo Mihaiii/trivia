@@ -39,7 +39,8 @@ MAX_TOPIC_LENGTH_CHARS = os.environ.get("MAX_TOPIC_LENGTH_CHARS")
 if not MAX_TOPIC_LENGTH_CHARS:
     MAX_TOPIC_LENGTH_CHARS = 30
 else:
-    MAX_TOPIC_LENGTH_CHARS = int(os.environ.get("MAX_TOPIC_LENGTH_CHARS"))   
+    MAX_TOPIC_LENGTH_CHARS = int(os.environ.get("MAX_TOPIC_LENGTH_CHARS"))
+    
 # AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
 MAX_NR_TOPICS_FOR_ALLOW_MORE = os.environ.get("MAX_NR_TOPICS_FOR_ALLOW_MORE")
 if not MAX_NR_TOPICS_FOR_ALLOW_MORE:
@@ -61,7 +62,7 @@ if not BID_MIN_POINTS:
 else:
     BID_MIN_POINTS = int(os.environ.get("BID_MIN_POINTS"))
     
- # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
+# MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 TOPIC_MAX_LENGTH = os.environ.get("TOPIC_MAX_LENGTH")
 if not TOPIC_MAX_LENGTH:
     TOPIC_MAX_LENGTH = 25
@@ -79,6 +80,21 @@ if not DUPLICATE_TOPIC_THRESHOLD:
     DUPLICATE_TOPIC_THRESHOLD = 0.9
 else:
     DUPLICATE_TOPIC_THRESHOLD = int(os.environ.get("DUPLICATE_TOPIC_THRESHOLD"))
+
+#How many consecutive question does a user have to answer in order to win combo points?
+COMBO_CONSECUTIVE_NR_FOR_WIN = os.environ.get("COMBO_CONSECUTIVE_NR_FOR_WIN")
+if not COMBO_CONSECUTIVE_NR_FOR_WIN:
+    COMBO_CONSECUTIVE_NR_FOR_WIN = 3
+else:
+    COMBO_CONSECUTIVE_NR_FOR_WIN = int(os.environ.get("COMBO_CONSECUTIVE_NR_FOR_WIN"))
+
+#How many points does a combo bonus offer?
+COMBO_WIN_POINTS = os.environ.get("COMBO_WIN_POINTS")
+if not COMBO_WIN_POINTS:
+    COMBO_WIN_POINTS = 50
+else:
+    COMBO_WIN_POINTS = int(os.environ.get("COMBO_WIN_POINTS"))
+
 
 Generator = IDGenerator()
 
@@ -384,11 +400,27 @@ class TaskManager:
             for db_winner in db_player:
                 winner_name = db_winner['name']
                 db_winner['points'] += (len(self.past_topic.winners) - self.past_topic.winners.index(winner_name)) * 10
+                    
+                self.online_users[winner_name]['combo_count'] += 1
+                if self.online_users[winner_name]['combo_count'] == COMBO_CONSECUTIVE_NR_FOR_WIN:
+                    self.online_users[winner_name]['combo_count'] = 0
+                    db_winner['points'] += COMBO_WIN_POINTS
+                    
+                    msg = f"Congratulations! You won {COMBO_WIN_POINTS} extra points because you answered {COMBO_CONSECUTIVE_NR_FOR_WIN} questions in a row."
+                    elem = Div(Div(Div(msg, cls=f"toast toast-info"), cls="toast-container"), hx_swap_oob="afterbegin:body")
+                    for client in self.online_users[winner_name]['ws_clients']:
+                        await self.send_to_clients(elem, client) 
+                        
                 players.update(db_winner)
-                
                 elem = Div(winner_name + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
                 for client in self.online_users[winner_name]['ws_clients']:
-                    await self.send_to_clients(elem, client)
+                    await self.send_to_clients(elem, client)   
+            
+            #if you won last question, but not this one, then sorry, it has to be consecutive, so resetting to 0
+            for key, user_data in self.online_users.items():
+                if key not in self.past_topic.winners:
+                    user_data['combo_count'] = 0
+                
                             
     async def broadcast_past_topic(self, client=None):
         if self.past_topic:                
