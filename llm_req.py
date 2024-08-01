@@ -93,7 +93,7 @@ with open('topics.json', 'r') as file:
     
 async def gen_topics():
     try:
-        random_values = random.sample(example_topics['topics'], 2)
+        random_values = random.sample(example_topics['topics'], 3)
         g_top = {
             "temperature": 1.3,
             "n_predict": 700,
