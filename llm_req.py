@@ -66,7 +66,7 @@ QUESTION_CHECK = (
 )
 
 
-QUESTION_PROMPT = (f"""Let's play a trivia game! Given a topic, provide an easy question that tests user's knowledge of that topic. Also provide 4 possible answers to the question. Only one answer must be the correct one, but the other 3 should be in that area. Make the question fun and easy in a sense that people that aren't expert in that domain could know the answer. If the topic constrains the question to not be easy, offer context and hints in the question text.
+QUESTION_PROMPT = (f"""Let's play a trivia game! Given a topic, provide an easy question that tests user's knowledge of that topic. Also provide 4 possible answers to the question. Only one answer must be the correct one, but the other 3 should be in that area. Make the question fun and easy in a sense that people that aren't expert in that domain could know the answer. If the topic constrains the question to not be easy, offer context and hints in the question text, but don't mention the exact response in the question text.
 
 Follow this JSON schema when providing the answer:
 
@@ -95,7 +95,7 @@ async def gen_topics():
     try:
         random_values = random.sample(example_topics['topics'], 3)
         g_top = {
-            "temperature": 1.3,
+            "temperature": 1.4,
             "n_predict": 700,
             "prompt": _add_special_tokens(GENERATE_TOPICS + ", ".join(random_values)),
             "json_schema": TOPICS_JSON_SCHEMA
