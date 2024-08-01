@@ -180,7 +180,7 @@ class TaskManager:
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
         self.current_timeout_task = None
-        self.clients = {"unassigned_clients": set()}  # Track connected WebSocket clients
+        self.online_users = {"unassigned_clients": set()}  # Track connected WebSocket clients
         self.clients_lock = threading.Lock()
         self.task = None
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -233,7 +233,7 @@ class TaskManager:
                     topic.status = "successful"
         except Exception as e:
             error_message = str(e)
-            print("llm error: " + error_message)
+            logging.debug("llm error: " + error_message)
             async with self.topics_lock:
                 topic.status = "failed"
 
@@ -356,14 +356,14 @@ class TaskManager:
 
     async def send_to_clients(self, element, client=None):
         with self.clients_lock:
-            clients = (self.clients if client is None else {'dd': [client]}).copy()
+            clients = (self.online_users if client is None else {'dd': [client]}).copy()
         for client in [item for subset in clients.values() for item in subset]:
             try:
                 await client(element)
             except:
                 with self.clients_lock:
                     key_to_remove = None
-                    for key, client_set in self.clients.items():
+                    for key, client_set in self.online_users.items():
                         if client in client_set:
                             client_set.remove(client)
                             if len(client_set) == 0:
@@ -371,7 +371,7 @@ class TaskManager:
                             logging.debug(f"Removed disconnected client: {client}")
                             break
                     if key_to_remove:
-                        self.clients.pop(key_to_remove)
+                        self.online_users.pop(key_to_remove)
                         
     async def compute_winners(self):
         if self.past_topic:
@@ -387,7 +387,7 @@ class TaskManager:
                 players.update(db_winner)
                 
                 elem = Div(winner_name + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
-                for client in self.clients[winner_name]:
+                for client in self.online_users[winner_name]:
                     await self.send_to_clients(elem, client)
                             
     async def broadcast_past_topic(self, client=None):
@@ -469,7 +469,7 @@ async def post(session, app):
         id="question_options"
     )
     
-    for client in task_manager.clients[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]:
         await task_manager.send_to_clients(div_a, client)
 
 
@@ -499,7 +499,7 @@ async def post(session):
         id="question_options"
     )
     
-    for client in task_manager.clients[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]:
         await task_manager.send_to_clients(div_b, client)
 
 
@@ -529,7 +529,7 @@ async def post(session, app):
         id="question_options"
     )
     
-    for client in task_manager.clients[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]:
         await task_manager.send_to_clients(div_c, client)
 
 
@@ -559,7 +559,7 @@ async def post(session):
         id="question_options"
     )
     
-    for client in task_manager.clients[session['session_id']]:
+    for client in task_manager.online_users[session['session_id']]:
         await task_manager.send_to_clients(div_d, client)
 
 
@@ -639,8 +639,8 @@ async def get(session, app, request):
     if 'session_id' in session:
         user_id = session['session_id']
         with task_manager.clients_lock:
-            if user_id not in task_manager.clients:
-                task_manager.clients[user_id] = set()
+            if user_id not in task_manager.online_users:
+                task_manager.online_users[user_id] = set()
 
         if user_id not in task_manager.user_dict:
             task_manager.user_dict[user_id] = None
@@ -656,8 +656,8 @@ async def get(session, app, request):
             result = db.q(query, (user_id,))
             task_manager.user_dict[user_id] = result[0]['id']
             session['session_id'] = user_id
-            task_manager.clients[user_id] = task_manager.clients[prev_user_id]
-            del task_manager.clients[prev_user_id]
+            task_manager.online_users[user_id] = task_manager.online_users[prev_user_id]
+            del task_manager.online_users[prev_user_id]
         else:
             current_points = db_player[0]['points']
 
@@ -748,7 +748,7 @@ async def get(session, app, request):
     db_player = db.q(f"select * from {players} order by points desc limit 20")
     cells = [Tr(Td(f"{idx}.", style="padding: 5px; width: 50px; text-align: center;"), Td(row['name'], style="padding: 5px;"), Td(row['points'], style="padding: 5px; text-align: center;")) for idx, row in enumerate(db_player, start=1)]
     with task_manager.clients_lock:
-        c = [c for c in task_manager.clients if c != "unassigned_clients"]
+        c = [c for c in task_manager.online_users if c != "unassigned_clients"]
         
     main_content = Div(
         Div(H2("Logged in users (" + str(len(c)) + "):"), Div(", ".join(c))),
@@ -806,7 +806,7 @@ async def post(session, topic: str, points: int):
     if 'session_id' not in session:
         add_toast(session, SIGN_IN_TEXT, "error")
         return bid_form()
-    print(f"Topic: {topic}, points: {points}")
+    logging.debug(f"Topic: {topic}, points: {points}")
     topic = topic.strip()
     if points < BID_MIN_POINTS:
         add_toast(session, f"Bid at least {BID_MIN_POINTS} points", "error")
@@ -851,7 +851,7 @@ async def post(session, topic: str, points: int):
             await task_manager.add_user_topic(topic=topic, points=points, user_id=user_id)
             elem = Div(user_id + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
 
-            for client in task_manager.clients[user_id]:
+            for client in task_manager.online_users[user_id]:
                 await task_manager.send_to_clients(elem, client)
         else:
             add_toast(session, "Not enough points", "error")
@@ -864,9 +864,9 @@ async def on_connect(send, ws):
         client_key = ws.scope['session']['session_id']        
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
-        if client_key not in task_manager.clients:
-            task_manager.clients[client_key] = set()
-        task_manager.clients[client_key].add(send)
+        if client_key not in task_manager.online_users:
+            task_manager.online_users[client_key] = set()
+        task_manager.online_users[client_key].add(send)
     await task_manager.broadcast_next_topics(send)
     if task_manager.current_topic:
         await task_manager.broadcast_current_question(send)
@@ -874,13 +874,13 @@ async def on_connect(send, ws):
 
 
 async def on_disconnect(send, session):
-    print("Calling on_disconnect")
-    print(len(app.state.task_manager.clients))
+    logging.debug("Calling on_disconnect")
+    logging.debug(len(app.state.task_manager.online_users))
     task_manager = app.state.task_manager
     with task_manager.clients_lock:
         key_to_remove = None
-        if send in task_manager.clients.copy():
-            for key, client_set in task_manager.clients.items():
+        if send in task_manager.online_users.copy():
+            for key, client_set in task_manager.online_users.items():
                 if send in client_set:
                     client_set.remove(send)
                     if len(client_set) == 0:
@@ -888,7 +888,7 @@ async def on_disconnect(send, session):
                     break
                 
             if key_to_remove:
-                task_manager.clients.pop(key_to_remove)
+                task_manager.online_users.pop(key_to_remove)
                         
             if session:
                 session['session_id'] = None
