@@ -185,7 +185,7 @@ class TaskManager:
         self.task = None
         self.countdown_var = QUESTION_COUNTDOWN_SEC
         self.current_topic = None
-        self.user_dict = {}
+        self.all_users = {}
 
     def reset(self):
         self.countdown_var = QUESTION_COUNTDOWN_SEC
@@ -378,7 +378,7 @@ class TaskManager:
             async with self.answers_lock:
                 self.past_topic.winners = [a[0] for a in self.past_topic.answers if a[1] == self.past_topic.question.correct_answer]
             
-            ids = ", ".join([str(self.user_dict[w]) for w in self.past_topic.winners])
+            ids = ", ".join([str(self.all_users[w]) for w in self.past_topic.winners])
             db_player = db.q(f"select * from {players} where {players.c.id} in ({ids})")
             
             for db_winner in db_player:
@@ -433,7 +433,7 @@ async def app_startup():
     task_manager = TaskManager(num_executors)
     app.state.task_manager = task_manager
     results = db.q(f"SELECT {players.c.name}, {players.c.id} FROM {players}")
-    task_manager.user_dict = {row['name']: row['id'] for row in results}
+    task_manager.all_users = {row['name']: row['id'] for row in results}
     asyncio.create_task(task_manager.monitor_topics())
     for i in range(num_executors):
         asyncio.create_task(task_manager.run_executor(i))
@@ -642,10 +642,10 @@ async def get(session, app, request):
             if user_id not in task_manager.online_users:
                 task_manager.online_users[user_id] = set()
 
-        if user_id not in task_manager.user_dict:
-            task_manager.user_dict[user_id] = None
+        if user_id not in task_manager.all_users:
+            task_manager.all_users[user_id] = None
 
-        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
+        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.all_users[user_id]}'")
     
         if not db_player:
             current_points = 20
@@ -654,7 +654,7 @@ async def get(session, app, request):
             players.insert({'name': user_id, 'points': current_points})
             query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
             result = db.q(query, (user_id,))
-            task_manager.user_dict[user_id] = result[0]['id']
+            task_manager.all_users[user_id] = result[0]['id']
             session['session_id'] = user_id
             task_manager.online_users[user_id] = task_manager.online_users[prev_user_id]
             del task_manager.online_users[prev_user_id]
@@ -843,7 +843,7 @@ async def post(session, topic: str, points: int):
 
     if 'session_id' in session:
         user_id = session['session_id']
-        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.user_dict[user_id]}'")
+        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.all_users[user_id]}'")
         if db_player[0]['points'] - points >= 0:
             db_player[0]['points'] -= points
             players.update(db_player[0])
