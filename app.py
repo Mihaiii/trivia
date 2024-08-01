@@ -121,7 +121,7 @@ css = [
     Style('.login { margin-bottom: 10px; max-width: fit-content; margin-left: auto; margin-right: auto;}'),
     Style('.primary:active { background-color: #0056b3; }'),
     Style('.last-tab  { display: flex; align-items: center;  justify-content: center;}'),
-    Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } .trivia-question { font-size: 20px; } #login-badge { width: 70%; } .login { display: flex; justify-content: center; align-items: center; height: 100%; } .login a {display: flex; justify-content: center; align-items: center; }}'),
+    Style('@media (max-width: 768px) { .side-panel { display: none; } .middle-panel { display: block; flex: 1; } .trivia-question { font-size: 20px; } #login-badge { width: 70%; } .login { display: flex; justify-content: center; align-items: center; height: 100%; } .login a {display: flex; justify-content: center; align-items: center; } #google { display: flex; justify-content: center; align-items: center; }}'),
     Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} .trivia-question { font-size: 30px; }}'),
     Style('@media (max-width: 430px) { #how-to-play { font-size: 8px; height: 49.6px; } #stats { height: 49.6px; } }'),
     Style('@media (min-width: 431px) { #play { width: 152.27px; } }')
@@ -679,7 +679,7 @@ async def get(session, app, request):
                                                              scope='https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid')
         google_btn = Div(
             A(Img(src="https://developers.google.com/identity/images/btn_google_signin_light_normal_web.png",
-                  style="width: 100%; height: auto; display: block; border-radius: 50px;"), href=google_login_link), style="display: flex; justify-content: center; align-items: center;")
+                  style="width: 100%; height: auto; display: block; border-radius: 50px;"), href=google_login_link), id="google")
         top_right_corner = Div(lbtn, google_btn)
     
     middle_panel = Div(
