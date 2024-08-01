@@ -73,7 +73,7 @@ Follow this JSON schema when providing the answer:
 {QUESTION_JSON_SCHEMA}
 """)
 
-GENERATE_TOPICS = """ Generate 6 short trivia topics without any details or answers. Make them diverse. Respond with a list of string that can be parsed. Nothing more. Here are some examples of good topics: """
+GENERATE_TOPICS = """Generate 6 short trivia topics without any details or answers. Make them diverse. Respond with a list of string that can be parsed. Nothing more. Here are some examples of good topics: """
 
 
 URL = "http://127.0.0.1:8000/completion"

@@ -811,7 +811,7 @@ async def get(session, app, request):
         "You can contact us on X: https://x.com/m_chirculescu and https://x.com/mihaidobrescu_."),
         
         ("How is the score decided?", 
-        f"The score is calculated based on the following formula: 10 + (number of people who answered correctly after you * 10). You'll receive {COMBO_WIN_POINTS} extra points for answering {COMBO_CONSECUTIVE_NR_FOR_WIN} questions correctly in a row."),
+        f"The score is calculated based on the following formula: 10 + (number of people who answered correctly after you * 10). You'll receive {COMBO_WIN_POINTS} extra points for answering correctly {COMBO_CONSECUTIVE_NR_FOR_WIN} questions in a row."),
         
         ("If I'm not sure of an answer, should I just guess an option?", 
         "Yes. You don't lose points for answering incorrectly."),
