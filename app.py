@@ -12,7 +12,6 @@ from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
 import llm_req
-from urllib.parse import urlparse
 import copy
 from id import IDGenerator
 
@@ -751,13 +750,7 @@ async def get(session, app, request):
         hx_ext='ws', ws_connect='/ws'
     )
     
-    container_wrapper = Div(container, enterToBid())
-    
-    base_link = urlparse(redirect_uri).hostname
-    if base_link and base_link not in request.url.netloc:
-        add_toast(session, f"Please use the following link: {base_link}", "info")
-        
-    return container_wrapper
+    return Div(container, enterToBid())
 
 @rt("/how-to-play")
 def get(app, session):
