@@ -11,7 +11,7 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
-import llm_req
+import fake_llm_req as llm_req
 from urllib.parse import urlparse
 import copy
 from id import IDGenerator
@@ -711,8 +711,8 @@ async def get(session, app, request):
         google_login_link = GoogleClient.prepare_request_uri(GoogleClient.base_url, GoogleClient.redirect_uri,
                                                              scope='https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid')
         google_btn = Div(
-            A(Img(src="https://developers.google.com/identity/images/btn_google_signin_light_normal_web.png",
-                  style="width: 100%; height: auto; display: block; border-radius: 50px;"), href=google_login_link), id="google")
+            A(Img(src="https://developers.google.com/identity/images/branding_guideline_sample_lt_sq_lg.svg",
+                  style="width: 100%; height: auto; display: block;"), href=google_login_link), id="google")
         top_right_corner = Div(lbtn, google_btn)
     
     middle_panel = Div(
