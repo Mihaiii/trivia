@@ -181,7 +181,7 @@ class TaskManager:
         self.current_topic_start_time = None
         self.current_timeout_task = None
         self.online_users = {"unassigned_clients": set()}  # Track connected WebSocket clients
-        self.clients_lock = threading.Lock()
+        self.online_users_lock = threading.Lock()
         self.task = None
         self.countdown_var = QUESTION_COUNTDOWN_SEC
         self.current_topic = None
@@ -355,13 +355,13 @@ class TaskManager:
         await self.send_to_clients(Div(*next_topics_html, id="next_topics"), client)
 
     async def send_to_clients(self, element, client=None):
-        with self.clients_lock:
+        with self.online_users_lock:
             clients = (self.online_users if client is None else {'dd': [client]}).copy()
         for client in [item for subset in clients.values() for item in subset]:
             try:
                 await client(element)
             except:
-                with self.clients_lock:
+                with self.online_users_lock:
                     key_to_remove = None
                     for key, client_set in self.online_users.items():
                         if client in client_set:
@@ -638,7 +638,7 @@ async def get(session, app, request):
     
     if 'session_id' in session:
         user_id = session['session_id']
-        with task_manager.clients_lock:
+        with task_manager.online_users_lock:
             if user_id not in task_manager.online_users:
                 task_manager.online_users[user_id] = set()
 
@@ -747,7 +747,7 @@ async def get(session, app, request):
     task_manager = app.state.task_manager
     db_player = db.q(f"select * from {players} order by points desc limit 20")
     cells = [Tr(Td(f"{idx}.", style="padding: 5px; width: 50px; text-align: center;"), Td(row['name'], style="padding: 5px;"), Td(row['points'], style="padding: 5px; text-align: center;")) for idx, row in enumerate(db_player, start=1)]
-    with task_manager.clients_lock:
+    with task_manager.online_users_lock:
         c = [c for c in task_manager.online_users if c != "unassigned_clients"]
         
     main_content = Div(
@@ -863,7 +863,7 @@ async def on_connect(send, ws):
     if ws.scope['session'] and ws.scope['session']['session_id']:
         client_key = ws.scope['session']['session_id']        
     task_manager = app.state.task_manager
-    with task_manager.clients_lock:
+    with task_manager.online_users_lock:
         if client_key not in task_manager.online_users:
             task_manager.online_users[client_key] = set()
         task_manager.online_users[client_key].add(send)
@@ -877,7 +877,7 @@ async def on_disconnect(send, session):
     logging.debug("Calling on_disconnect")
     logging.debug(len(app.state.task_manager.online_users))
     task_manager = app.state.task_manager
-    with task_manager.clients_lock:
+    with task_manager.online_users_lock:
         key_to_remove = None
         if send in task_manager.online_users.copy():
             for key, client_set in task_manager.online_users.items():
