@@ -66,7 +66,7 @@ QUESTION_CHECK = (
 )
 
 
-QUESTION_PROMPT = (f"""Let's play a trivia game! Given a topic, provide an easy question that tests user's knowledge of that topic. Also provide 4 possible answers to the question. Only one answer must be the correct one, but the other 3 should be in that area. Make the question fun and easy in a sense that people that aren't expert in that domain could know the answer. If the topic constrains the question to not be easy, offer context and hints in the question text, but don't mention the exact response in the question text.
+QUESTION_PROMPT = (f"""Let's play a trivia game! Given a topic, provide an easy question that tests user's knowledge of that topic. Also provide 4 possible answers to the question. Only one answer must be the correct one, but the other 3 should be in that area. Make the question fun and easy in a sense that people that aren't expert in that domain could know the answer. If the topic constrains the question to not be easy, offer context and hints in the question text, but don't mention the exact response in the question text. Do not formulate a question that has the topic as an option because the user can see the topic so that defeats the purpose.
 
 Follow this JSON schema when providing the answer:
 
