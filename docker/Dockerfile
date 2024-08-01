@@ -13,8 +13,6 @@ COPY script.sh .
 RUN chmod +x ./script.sh
 RUN chmod 777 .
 
-EXPOSE 8000
-
 RUN git clone https://github.com/Mihaiii/trivia.git
 RUN cd trivia && pip install -r requirements.txt
 RUN chmod 777 ./trivia
