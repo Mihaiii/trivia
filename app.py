@@ -271,7 +271,7 @@ class TaskManager:
         async with self.topics_lock:
             if len(self.topics) < env_vars.MAX_NR_TOPICS_FOR_ALLOW_MORE:
                 try:
-                    trivia_recs = db.q(f"SELECT * FROM trivias ORDER BY RANDOM() LIMIT {env_vars.MAX_NR_TOPICS_FOR_ALLOW_MORE}")                   
+                    trivia_recs = db.q(f"SELECT * FROM {trivias} ORDER BY RANDOM() LIMIT {env_vars.MAX_NR_TOPICS_FOR_ALLOW_MORE}")                   
                     for trivia_rec in trivia_recs:
                         self.topics.append(
                             Topic(points=0,
