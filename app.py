@@ -134,10 +134,10 @@ class TaskManager:
 
     async def update_status(self, topic: Topic):
         await asyncio.sleep(1)
-        should_consume = False
-            
+        should_consume = False 
         if topic.is_from_db:
-            status ="successful"
+            async with self.topics_lock:
+                topic.status ="successful"
         else:
             async with self.topics_lock:
                 clone_topic = copy.copy(topic)
