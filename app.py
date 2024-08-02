@@ -640,14 +640,17 @@ async def get(session, app, request):
         
         if user_id not in task_manager.all_users:
             task_manager.all_users[user_id] = None
-        
-        auth_method_id = task_manager.online_users[user_id]['auth_method_id']
+            auth_method_id = 0
+        else:
+            auth_method_id = task_manager.online_users[user_id]['auth_method_id']
+            
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.all_users[user_id]}' and {players.c.auth_method_id} = {auth_method_id}")
     
         if not db_player:
             current_points = 20
             players.insert({'name': user_id, 'points': current_points, 'auth_method_id': auth_method_id})
-            result = db.q(f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = {user_id} and {players.c.auth_method_id} = {auth_method_id}")
+            query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ? and {players.c.auth_method_id} = ?"
+            result = db.q(query, (user_id, auth_method_id))
             task_manager.all_users[user_id] = result[0]['id']
         else:
             current_points = db_player[0]['points']
