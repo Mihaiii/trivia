@@ -263,7 +263,7 @@ class TaskManager:
                     trivia_recs = db.q(f"SELECT * FROM trivias ORDER BY RANDOM() LIMIT {env_vars.MAX_NR_TOPICS_FOR_ALLOW_MORE}")                   
                     for trivia_rec in trivia_recs:
                         self.topics.append(
-                            Topic(0,
+                            Topic(points=0,
                                   topic=trivia_rec["topic"],
                                   user="[bot]", 
                                   question=Question(trivia_rec["question"], trivia_rec["option_A"],  trivia_rec["option_B"], trivia_rec["option_C"], trivia_rec["option_D"], f"option_{trivia_rec["correct_option"]}"),
