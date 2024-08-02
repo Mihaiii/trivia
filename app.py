@@ -11,7 +11,7 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
-import llm_req
+import fake_llm_req as llm_req
 import copy
 
 logging.basicConfig(level=logging.DEBUG)
@@ -136,7 +136,7 @@ css = [
     Style('@media (min-width: 769px) { .login_wrapper { display: none; } .bid_wrapper {display: none; } .past_topic_wrapper {display: none;} .trivia-question { font-size: 30px; }}'),
     Style('@media (max-width: 430px) { #how-to-play { font-size: 8.5px; height: 49.6px; } #stats { height: 49.6px; } }'),
     Style('@media (min-width: 431px) { #play { width: 152.27px; } }'),
-    Style('@media (max-width: 347px) { #how-to-play { font-size: 7px; ) }')
+    Style('@media (max-width: 347px) { #how-to-play { white-space: normal; word-wrap: break-word; ) }')
 ]
 
 
