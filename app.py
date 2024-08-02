@@ -696,7 +696,7 @@ async def get(session, app, request):
         hx_ext='ws', ws_connect='/ws'
     )
     
-    return Div(container, enterToBid())
+    return Title("Trivia"), Div(container, enterToBid())
 
 @rt("/how-to-play")
 def get(app, session):
@@ -710,8 +710,7 @@ def get(app, session):
                  , style="padding: 10px;")
                  )
              )
-    container = Div(tabs, rules, style="font-size: 20px;", cls="container")
-    return container
+    return Title("Trivia"), Div(tabs, rules, style="font-size: 20px;", cls="container")
 
 @rt('/stats')
 async def get(session, app, request):
@@ -725,7 +724,7 @@ async def get(session, app, request):
         Div(H2("Logged in users (" + str(len(c)) + "):"), Div(", ".join(c))),
         Div(H1("Leaderboard", style="text-align: center;"), Table(Tr(Th(B("Rank")), Th(B('HuggingFace Username')), Th(B("Points"), style="text-align: center;")), *cells))
     )
-    return Div(
+    return Title("Trivia"), Div(
         tabs,
         main_content,
         cls="container"
@@ -766,7 +765,7 @@ async def get(session, app, request):
     ]
 
     main_content = Ul(*[Li(Strong(pair[0]), Br(), P(pair[1])) for pair in qa], style="padding: 10px; font-size: 20px;")
-    return Div(
+    return Title("Trivia"), Div(
         tabs,
         main_content,
         cls="container"
