@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with HuggingFace" or "Sign in with Google"."""
   
-db = database(f'{env_vars.DB_DIRECTORY}uplayers.db')
+db = database(f'{env_vars.DB_DIRECTORY}trivia.db')
 players = db.t.players
 auth_methods = db.t.auth_methods
 trivias = db.t.trivias
