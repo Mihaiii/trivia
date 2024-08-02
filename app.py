@@ -11,7 +11,7 @@ from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
 from js_scripts import ThemeSwitch, enterToBid
-import fake_llm_req as llm_req
+import llm_req
 import copy
 import env_vars
 
