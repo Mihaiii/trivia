@@ -14,6 +14,8 @@ from js_scripts import ThemeSwitch, enterToBid
 import llm_req
 import copy
 import env_vars
+import sqlite3
+from datasets import load_dataset
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -35,8 +37,17 @@ if auth_methods not in db.t:
 
 trivias = db.t.trivias
 if trivias not in db.t:
-    #TODO
-    pass
+    trivias.create(topic=str, question=str, option_A=str, option_B=str, option_C=str, option_D=str, correct_option=str, pk='id')
+    #bulk import from HF dataset
+    dataset = load_dataset('Mihaiii/trivia_single_choice-4-options', split='train')
+    conn = sqlite3.connect('uplayers.db')
+    cursor = conn.cursor()
+    insert_query = "INSERT INTO dataset_table (topic, question, option_A, option_B, option_C, option_D, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    conn.execute('BEGIN TRANSACTION')
+    for record in dataset:
+        cursor.execute(insert_query, (record['topic'], record['question'], record['option_A'], record['option_B'], record['option_C'], record['option_D'], record['correct_option']))
+    conn.commit()
+    conn.close()
 
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
@@ -155,7 +166,7 @@ class TaskManager:
             try:
                 if clone_topic.status == "pending":
                     llm_resp = await llm_req.topic_check(clone_topic.topic)
-                    if llm_resp == "Yes":
+                    if llm_resp == "No":
                         status = "computing"
                     else:
                         status = "failed"
