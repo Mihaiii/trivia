@@ -29,7 +29,7 @@ DUPLICATE_TOPIC_THRESHOLD = int(os.environ.get("DUPLICATE_TOPIC_THRESHOLD", 0.9)
 COMBO_CONSECUTIVE_NR_FOR_WIN = int(os.environ.get("COMBO_CONSECUTIVE_NR_FOR_WIN", 3))
 
 #How many points does a combo bonus offer?
-COMBO_WIN_POINTS = int(oos.environ.get("COMBO_WIN_POINTS", 50))
+COMBO_WIN_POINTS = int(os.environ.get("COMBO_WIN_POINTS", 50))
 
 HF_CLIENT_ID = os.environ.get("HF_CLIENT_ID")
 HF_CLIENT_SECRET = os.environ.get("HF_CLIENT_SECRET")
