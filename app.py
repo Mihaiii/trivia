@@ -23,7 +23,15 @@ SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with Hugg
 db = database(f'{env_vars.DB_DIRECTORY}uplayers.db')
 players = db.t.players
 if players not in db.t:
-    players.create(id=int, name=str, points=int, pk='id')
+    players.create(id=int, name=str, points=int, auth_method_id=int, pk='id')
+    
+auth_methods = db.t.auth_methods
+if auth_methods not in db.t:
+    auth_methods.create(id=int, name=str, pk='id')
+    auth_methods.insert({'name': "Unknown"}) # id 0
+    auth_methods.insert({'name': "Huggingface"}) # id 1
+    auth_methods.insert({'name': "Gmail"}) # id 2
+    db.add_foreign_keys((('players', 'auth_method_id', 'auth_methods', 'id'),))
 
 
 def similar(a, b):
@@ -104,7 +112,7 @@ class TaskManager:
         self.executor_tasks = [set() for _ in range(num_executors)]
         self.current_topic_start_time = None
         self.current_timeout_task = None
-        self.online_users = {"unassigned_clients": {'ws_clients': set(), 'combo_count': 0}}  # Track connected WebSocket clients
+        self.online_users = {"unassigned_clients": {'ws_clients': set(), 'combo_count': 0, 'auth_method_id': 0}}  # Track connected WebSocket clients
         self.online_users_lock = threading.Lock()
         self.task = None
         self.countdown_var = env_vars.QUESTION_COUNTDOWN_SEC
@@ -538,7 +546,12 @@ def get(app, session, code: str = None):
     user_id = user_info.get("preferred_username")    
     if 'session_id' not in session:
         session['session_id'] = user_id
-
+    
+    task_manager = app.state.task_manager    
+    with task_manager.online_users_lock:
+        if user_id not in task_manager.online_users:
+            task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0, 'auth_method_id': 1 }
+            
     logging.info(f"Client connected: {user_id}")
     return RedirectResponse(url="/")
 
@@ -553,6 +566,12 @@ def get(app, session, code: str = None):
     user_id = user_info.get('name')
     if 'session_id' not in session:
         session['session_id'] = user_id
+
+    task_manager = app.state.task_manager    
+    with task_manager.online_users_lock:
+        if user_id not in task_manager.online_users:
+            task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0, 'auth_method_id': 2 }
+
 
     logging.info(f"Client connected: {user_id}")
     return RedirectResponse(url="/")
@@ -580,18 +599,15 @@ async def get(session, app, request):
         user_id = session['session_id']
         with task_manager.online_users_lock:
             if user_id not in task_manager.online_users:
-                task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0 }
-
-        if user_id not in task_manager.all_users:
-            task_manager.all_users[user_id] = None
+                task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0, 'auth_method_id': 0 }
 
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.all_users[user_id]}'")
     
         if not db_player:
+            auth_method_id = task_manager.online_users[user_id]['auth_method_id']
             current_points = 20
-            players.insert({'name': user_id, 'points': current_points})
-            query = f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = ?"
-            result = db.q(query, (user_id,))
+            players.insert({'name': user_id, 'points': current_points, 'auth_method_id': auth_method_id})
+            result = db.q(f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = {user_id} and {players.c.auth_method_id} = {auth_method_id}")
             task_manager.all_users[user_id] = result[0]['id']
         else:
             current_points = db_player[0]['points']
@@ -794,7 +810,7 @@ async def on_connect(send, ws):
     task_manager = app.state.task_manager
     with task_manager.online_users_lock:
         if client_key not in task_manager.online_users:
-            task_manager.online_users[client_key] = { 'ws_clients': set(), 'combo_count': 0 }
+            task_manager.online_users[client_key] = { 'ws_clients': set(), 'combo_count': 0, 'auth_method_id': 0 }
         task_manager.online_users[client_key]['ws_clients'].add(send)
     await task_manager.broadcast_next_topics(send)
     if task_manager.current_topic:
