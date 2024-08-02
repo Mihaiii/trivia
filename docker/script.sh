@@ -1,5 +1,6 @@
 #!/bin/bash
-../llama-server -m ./Meta-Llama-3.1-8B-Instruct-Q8_0.gguf -c 8192 -t 4 --n-gpu-layers 20000 --port 8000 --host 127.0.0.1 --parallel 2 -cb &
+../llama-server -m ./shieldgemma-2b-q5_k_m-imat.gguf -c 8192 -t 4 --port 8000 --host 127.0.0.1 --parallel 2 -cb &
+../llama-server -m ./gemma-2-2b-it-Q5_K_M.gguf -c 8192 -t 4 --port 7888 --host 127.0.0.1 --parallel 2 -cb &
 
 sleep 5
 
