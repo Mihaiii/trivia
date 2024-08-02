@@ -409,6 +409,7 @@ def ensure_db_tables():
             cursor.execute(insert_query, (record['topic'], record['question'], record['option_A'], record['option_B'], record['option_C'], record['option_D'], record['correct_option']))
         conn.commit()
         conn.close()
+        logging.debug("Count trivia rows:" + str(len(list(trivias.rows))))
     
 async def app_startup():
     ensure_db_tables()
