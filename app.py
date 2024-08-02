@@ -13,100 +13,14 @@ from difflib import SequenceMatcher
 from scripts import ThemeSwitch, enterToBid
 import fake_llm_req as llm_req
 import copy
+import env_vars
 
 logging.basicConfig(level=logging.DEBUG)
 
 SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with HuggingFace" or "Sign in with Google"."""
 
-# HOW MUCH TIME USERS HAVE TO ANSWER THE QUESTION? IN PROD WILL PROBABLY BE 18 or 20.
-QUESTION_COUNTDOWN_SEC = os.environ.get("QUESTION_COUNTDOWN_SEC")
-if not QUESTION_COUNTDOWN_SEC:
-    QUESTION_COUNTDOWN_SEC = 22
-else:
-    QUESTION_COUNTDOWN_SEC = int(os.environ.get("QUESTION_COUNTDOWN_SEC")) 
-        
-# NUMBER OF SECONDS TO KEEP THE FAILED TOPIC IN THE UI (USER INTERFACE) BEFORE REMOVING IT FROM THE LIST
-KEEP_FAILED_TOPIC_SEC = os.environ.get("KEEP_FAILED_TOPIC_SEC")
-if not KEEP_FAILED_TOPIC_SEC:
-    KEEP_FAILED_TOPIC_SEC = 5
-else:
-    KEEP_FAILED_TOPIC_SEC = int(os.environ.get("KEEP_FAILED_TOPIC_SEC")) 
-        
-# DON'T ALLOW USER TO WRITE LONG TOPICS
-MAX_TOPIC_LENGTH_CHARS = os.environ.get("MAX_TOPIC_LENGTH_CHARS")
-if not MAX_TOPIC_LENGTH_CHARS:
-    MAX_TOPIC_LENGTH_CHARS = 30
-else:
-    MAX_TOPIC_LENGTH_CHARS = int(os.environ.get("MAX_TOPIC_LENGTH_CHARS"))
     
-# AUTOMATICALLY ADD TOPICS IF THE USERS DON'T BID/PROPOSE NEW ONES
-MAX_NR_TOPICS_FOR_ALLOW_MORE = os.environ.get("MAX_NR_TOPICS_FOR_ALLOW_MORE")
-if not MAX_NR_TOPICS_FOR_ALLOW_MORE:
-    MAX_NR_TOPICS_FOR_ALLOW_MORE = 6
-else:
-    MAX_NR_TOPICS_FOR_ALLOW_MORE = int(os.environ.get("MAX_NR_TOPICS_FOR_ALLOW_MORE"))
-
-# NUMBER OF TOPICS TO APPEAR IN THE UI. THE ACTUAL LIST CAN CONTAIN MORE THAN THIS.
-NR_TOPICS_TO_BROADCAST = os.environ.get("NR_TOPICS_TO_BROADCAST")
-if not NR_TOPICS_TO_BROADCAST:
-    NR_TOPICS_TO_BROADCAST = 5
-else:
-    NR_TOPICS_TO_BROADCAST = int(os.environ.get("NR_TOPICS_TO_BROADCAST"))
-
-# MINIMUM NUMBER OF POINTS REQUIRED TO PLACE A TOPIC BID IN THE UI
-BID_MIN_POINTS = os.environ.get("BID_MIN_POINTS")
-if not BID_MIN_POINTS:
-    BID_MIN_POINTS = 3
-else:
-    BID_MIN_POINTS = int(os.environ.get("BID_MIN_POINTS"))
-    
-# MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
-TOPIC_MAX_LENGTH = os.environ.get("TOPIC_MAX_LENGTH")
-if not TOPIC_MAX_LENGTH:
-    TOPIC_MAX_LENGTH = 25
-else:
-    TOPIC_MAX_LENGTH = int(os.environ.get("TOPIC_MAX_LENGTH"))
-        
-MAX_NR_TOPICS = os.environ.get("MAX_NR_TOPICS")
-if not MAX_NR_TOPICS:
-    MAX_NR_TOPICS = 20
-else:
-    MAX_NR_TOPICS = int(os.environ.get("MAX_NR_TOPICS"))
-    
-DUPLICATE_TOPIC_THRESHOLD = os.environ.get("DUPLICATE_TOPIC_THRESHOLD")
-if not DUPLICATE_TOPIC_THRESHOLD:
-    DUPLICATE_TOPIC_THRESHOLD = 0.9
-else:
-    DUPLICATE_TOPIC_THRESHOLD = int(os.environ.get("DUPLICATE_TOPIC_THRESHOLD"))
-
-#How many consecutive question does a user have to answer in order to win combo points?
-COMBO_CONSECUTIVE_NR_FOR_WIN = os.environ.get("COMBO_CONSECUTIVE_NR_FOR_WIN")
-if not COMBO_CONSECUTIVE_NR_FOR_WIN:
-    COMBO_CONSECUTIVE_NR_FOR_WIN = 3
-else:
-    COMBO_CONSECUTIVE_NR_FOR_WIN = int(os.environ.get("COMBO_CONSECUTIVE_NR_FOR_WIN"))
-
-#How many points does a combo bonus offer?
-COMBO_WIN_POINTS = os.environ.get("COMBO_WIN_POINTS")
-if not COMBO_WIN_POINTS:
-    COMBO_WIN_POINTS = 50
-else:
-    COMBO_WIN_POINTS = int(os.environ.get("COMBO_WIN_POINTS"))
-
-hf_client_id = os.environ.get("HF_CLIENT_ID")
-hf_client_secret = os.environ.get("HF_CLIENT_SECRET")
-redirect_uri = os.environ.get("HF_REDIRECT_URI")
-
-google_client_id = os.environ.get("GOOGLE_CLIENT_ID")
-google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
-google_redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI")
-
-db_directory = os.environ.get("DB_DIRECTORY")
-
-if not db_directory:
-    db_directory = ""
-    
-db = database(f'{db_directory}uplayers.db')
+db = database(f'{env_vars.DB_DIRECTORY}uplayers.db')
 players = db.t.players
 if players not in db.t:
     players.create(id=int, name=str, points=int, pk='id')
@@ -141,15 +55,15 @@ css = [
 
 
 huggingface_client = HuggingFaceClient(
-    client_id=hf_client_id,
-    client_secret=hf_client_secret,
-    redirect_uri=redirect_uri
+    client_id=env_vars.HF_CLIENT_ID,
+    client_secret=env_vars.HF_CLIENT_SECRET,
+    redirect_uri=env_vars.HF_REDIRECT_URI
 )
 
 GoogleClient = GoogleAppClient(
-    client_id=google_client_id,
-    redirect_uri=google_redirect_uri,
-    client_secret=google_client_secret
+    client_id=env_vars.GOOGLE_CLIENT_ID,
+    redirect_uri=env_vars.GOOGLE_REDIRECT_URI,
+    client_secret=env_vars.GOOGLE_CLIENT_SECRET
 )
 
 @dataclass
@@ -194,12 +108,12 @@ class TaskManager:
         self.online_users = {"unassigned_clients": {'ws_clients': set(), 'combo_count': 0}}  # Track connected WebSocket clients
         self.online_users_lock = threading.Lock()
         self.task = None
-        self.countdown_var = QUESTION_COUNTDOWN_SEC
+        self.countdown_var = env_vars.QUESTION_COUNTDOWN_SEC
         self.current_topic = None
         self.all_users = {}
 
     def reset(self):
-        self.countdown_var = QUESTION_COUNTDOWN_SEC
+        self.countdown_var = env_vars.QUESTION_COUNTDOWN_SEC
 
     async def run_executor(self, executor_id: int):
         while True:
@@ -285,8 +199,8 @@ class TaskManager:
 
     async def topic_timeout(self):
         try:
-            await asyncio.sleep(QUESTION_COUNTDOWN_SEC)
-            logging.debug(f"{QUESTION_COUNTDOWN_SEC} seconds timeout completed")
+            await asyncio.sleep(env_vars.QUESTION_COUNTDOWN_SEC)
+            logging.debug(f"{env_vars.QUESTION_COUNTDOWN_SEC} seconds timeout completed")
             await self.check_topic_completion()
         except asyncio.CancelledError:
             logging.debug("Timeout task cancelled")
@@ -298,7 +212,7 @@ class TaskManager:
             current_time = asyncio.get_event_loop().time()
             logging.debug(current_time)
             logging.debug(self.current_topic_start_time)
-            if self.current_topic and (current_time - self.current_topic_start_time >= QUESTION_COUNTDOWN_SEC - 1):
+            if self.current_topic and (current_time - self.current_topic_start_time >= env_vars.QUESTION_COUNTDOWN_SEC - 1):
                 logging.debug(f"Completing topic: {self.current_topic.topic}")
                 should_consume = True
         if should_consume:
@@ -310,7 +224,7 @@ class TaskManager:
             await self.consume_successful_topic()
 
     async def remove_failed_topic(self, topic: Topic):
-        await asyncio.sleep(KEEP_FAILED_TOPIC_SEC)
+        await asyncio.sleep(env_vars.KEEP_FAILED_TOPIC_SEC)
         if topic in self.topics and topic.status == "failed":
             self.topics.remove(topic)
             await self.broadcast_next_topics()
@@ -329,7 +243,7 @@ class TaskManager:
 
     async def add_default_topics(self):
         async with self.topics_lock:
-            if len(self.topics) < MAX_NR_TOPICS_FOR_ALLOW_MORE:
+            if len(self.topics) < env_vars.MAX_NR_TOPICS_FOR_ALLOW_MORE:
                 try:
                     topics = await llm_req.gen_topics()
                     for t in topics:
@@ -345,13 +259,13 @@ class TaskManager:
         async with self.topics_lock:
             self.topics.append(Topic(points=points, topic=topic, user=user_id))
             self.topics = deque(sorted(self.topics, reverse=True))
-            if len(self.topics) > MAX_NR_TOPICS:
-                self.topics = self.topics[::-MAX_NR_TOPICS]
+            if len(self.topics) > env_vars.MAX_NR_TOPICS:
+                self.topics = self.topics[::-env_vars.MAX_NR_TOPICS]
             await self.broadcast_next_topics()
             logging.debug(f"User topic: {topic} added")
 
     async def broadcast_next_topics(self, client=None):
-        next_topics = list(self.topics)[:NR_TOPICS_TO_BROADCAST]
+        next_topics = list(self.topics)[:env_vars.NR_TOPICS_TO_BROADCAST]
         status_dict = {
             'failed': '#dc552c',
             'pending': '#ede7dd',
@@ -397,11 +311,11 @@ class TaskManager:
                 db_winner['points'] += (len(self.past_topic.winners) - self.past_topic.winners.index(winner_name)) * 10
                     
                 self.online_users[winner_name]['combo_count'] += 1
-                if self.online_users[winner_name]['combo_count'] == COMBO_CONSECUTIVE_NR_FOR_WIN:
+                if self.online_users[winner_name]['combo_count'] == env_vars.COMBO_CONSECUTIVE_NR_FOR_WIN:
                     self.online_users[winner_name]['combo_count'] = 0
-                    db_winner['points'] += COMBO_WIN_POINTS
+                    db_winner['points'] += env_vars.COMBO_WIN_POINTS
                     
-                    msg = f"Congratulations! You have earned {COMBO_WIN_POINTS} extra points for answering {COMBO_CONSECUTIVE_NR_FOR_WIN} questions correctly in a row."
+                    msg = f"Congratulations! You have earned {env_vars.COMBO_WIN_POINTS} extra points for answering {env_vars.COMBO_CONSECUTIVE_NR_FOR_WIN} questions correctly in a row."
                     elem = Div(Div(Div(msg, cls=f"toast toast-info"), cls="toast-container"), hx_swap_oob="afterbegin:body")
                     for client in self.online_users[winner_name]['ws_clients']:
                         await self.send_to_clients(elem, client) 
@@ -442,7 +356,7 @@ class TaskManager:
         await self.send_to_clients(Div(current_question_info, id="current_question_info"), client)
 
     async def count(self):
-        self.countdown_var = QUESTION_COUNTDOWN_SEC
+        self.countdown_var = env_vars.QUESTION_COUNTDOWN_SEC
         while self.countdown_var >= 0:
             await self.broadcast_countdown()
             await asyncio.sleep(1)
@@ -608,8 +522,8 @@ def unselectedOptions():
 
 
 def bid_form():
-    return Div(Form(Input(type='text', name='topic', placeholder="Propose a topic", maxlength=f"{TOPIC_MAX_LENGTH}", required=True, autofocus=True),
-                 Input(type="number", placeholder="NR POINTS", min=BID_MIN_POINTS, name='points', value=BID_MIN_POINTS, required=True),
+    return Div(Form(Input(type='text', name='topic', placeholder="Propose a topic", maxlength=f"{env_vars.TOPIC_MAX_LENGTH}", required=True, autofocus=True),
+                 Input(type="number", placeholder="NR POINTS", min=env_vars.BID_MIN_POINTS, name='points', value=env_vars.BID_MIN_POINTS, required=True),
                  Button('BID', cls='primary', style='width: 100%;', id="bid_btn"),
                  action='/', hx_post='/bid', style='border: 5px solid #eaf6f6; padding: 10px; width: 100%; margin: 10px auto;', id='bid_form'), hx_swap="outerHTML"
             )
@@ -745,7 +659,7 @@ async def get(session, app, request):
 
 @rt("/how-to-play")
 def get(app, session):
-    rules = (Div(f"Every question that you see is generated by AI. Every {QUESTION_COUNTDOWN_SEC} seconds a new question will appear on your screen and you have to answer correctly in order to accumulate points. You get more points if more users answer correctly after you (this incentivises users to play with their friends).", style="padding: 10px; margin-top: 30px;"),
+    rules = (Div(f"Every question that you see is generated by AI. Every {env_vars.QUESTION_COUNTDOWN_SEC} seconds a new question will appear on your screen and you have to answer correctly in order to accumulate points. You get more points if more users answer correctly after you (this incentivises users to play with their friends).", style="padding: 10px; margin-top: 30px;"),
              Div("Using your points, you can bid on a new topic of your choice to appear in the future. The more points you bid the faster the topic will be shown. This means that if you bid a topic for 10 points and someone else for 5, yours will be shown first.", style="padding: 10px;"),
              Div(Div("A topic card can have one of the following statuses, depending on its current state:", style="padding: 10px;"), Ul(
                  Li("pending - This is the initial status a topic card has. When a pending card is picked up, it's first sent to a LLM (large language model) in order to confirm the topic meets quality criterias (ex: it needs to be in english, it doesn't have to have sensitive content etc.). If the LLM confirms that the proposed topic is ok, the status of the card will become 'computing'. Otherwise, it becomes 'failed'."),
@@ -795,7 +709,7 @@ async def get(session, app, request):
         "You can contact us on X: https://x.com/m_chirculescu and https://x.com/mihaidobrescu_."),
         
         ("How is the score decided?", 
-        f"The score is calculated based on the following formula: 10 + (number of people who answered correctly after you * 10). You'll receive {COMBO_WIN_POINTS} extra points for answering correctly {COMBO_CONSECUTIVE_NR_FOR_WIN} questions in a row."),
+        f"The score is calculated based on the following formula: 10 + (number of people who answered correctly after you * 10). You'll receive {env_vars.COMBO_WIN_POINTS} extra points for answering correctly {env_vars.COMBO_CONSECUTIVE_NR_FOR_WIN} questions in a row."),
         
         ("If I'm not sure of an answer, should I just guess an option?", 
         "Yes. You don't lose points for answering incorrectly."),
@@ -824,12 +738,12 @@ async def post(session, topic: str, points: int):
         return bid_form()
     logging.debug(f"Topic: {topic}, points: {points}")
     topic = topic.strip()
-    if points < BID_MIN_POINTS:
-        add_toast(session, f"Bid at least {BID_MIN_POINTS} points", "error")
+    if points < env_vars.BID_MIN_POINTS:
+        add_toast(session, f"Bid at least {env_vars.BID_MIN_POINTS} points", "error")
         return bid_form()
     
-    if len(topic) > TOPIC_MAX_LENGTH:
-        add_toast(session, f"The topic max length is {TOPIC_MAX_LENGTH} characters", "error")
+    if len(topic) > env_vars.TOPIC_MAX_LENGTH:
+        add_toast(session, f"The topic max length is {env_vars.TOPIC_MAX_LENGTH} characters", "error")
         return bid_form()
     
     if len(topic) == 0:
@@ -843,17 +757,17 @@ async def post(session, topic: str, points: int):
     task_manager = app.state.task_manager
 
     async with task_manager.topics_lock:
-        if similar(topic, task_manager.current_topic.topic) >= DUPLICATE_TOPIC_THRESHOLD:
+        if similar(topic, task_manager.current_topic.topic) >= env_vars.DUPLICATE_TOPIC_THRESHOLD:
             add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
             return bid_form()
 
         for t in task_manager.topics:
-            if similar(t.topic, topic) >= DUPLICATE_TOPIC_THRESHOLD:
+            if similar(t.topic, topic) >= env_vars.DUPLICATE_TOPIC_THRESHOLD:
                 add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
                 return bid_form()
             
         if task_manager.past_topic:
-            if similar(t.topic, task_manager.past_topic.topic) >= DUPLICATE_TOPIC_THRESHOLD:
+            if similar(t.topic, task_manager.past_topic.topic) >= env_vars.DUPLICATE_TOPIC_THRESHOLD:
                 add_toast(session, f"Topic '{topic}' is very similar with an existing one. Please request another topic.")
                 return bid_form()
 
