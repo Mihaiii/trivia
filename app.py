@@ -277,7 +277,7 @@ class TaskManager:
                             Topic(points=0,
                                   topic=trivia_rec["topic"],
                                   user="[bot]", 
-                                  question=Question(trivia_rec["question"], trivia_rec["option_A"],  trivia_rec["option_B"], trivia_rec["option_C"], trivia_rec["option_D"], f"option_{trivia_rec["correct_option"]}"),
+                                  question=Question(trivia_rec["question"], trivia_rec["option_A"],  trivia_rec["option_B"], trivia_rec["option_C"], trivia_rec["option_D"], "option_{}".format(trivia_rec["correct_option"])),
                                   is_from_db=True))
                     self.topics = deque(sorted(self.topics, reverse=True))
                     await self.broadcast_next_topics()
