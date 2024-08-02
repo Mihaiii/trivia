@@ -42,7 +42,7 @@ if trivias not in db.t:
     dataset = load_dataset('Mihaiii/trivia_single_choice-4-options', split='train')
     conn = sqlite3.connect('uplayers.db')
     cursor = conn.cursor()
-    insert_query = "INSERT INTO dataset_table (topic, question, option_A, option_B, option_C, option_D, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    insert_query = "INSERT INTO trivias (topic, question, option_A, option_B, option_C, option_D, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)"
     conn.execute('BEGIN TRANSACTION')
     for record in dataset:
         cursor.execute(insert_query, (record['topic'], record['question'], record['option_A'], record['option_B'], record['option_C'], record['option_D'], record['correct_option']))
