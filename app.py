@@ -20,47 +20,12 @@ from datasets import load_dataset
 logging.basicConfig(level=logging.DEBUG)
 
 SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with HuggingFace" or "Sign in with Google"."""
-
-    
+  
 db = database(f'{env_vars.DB_DIRECTORY}uplayers.db')
 players = db.t.players
-if players not in db.t:
-    players.create(id=int, name=str, points=int, auth_method_id=int, pk='id')
-    
 auth_methods = db.t.auth_methods
-if auth_methods not in db.t:
-    auth_methods.create(id=int, name=str, pk='id')
-    auth_methods.insert({'name': "Unknown"}) # id 0
-    auth_methods.insert({'name': "Huggingface"}) # id 1
-    auth_methods.insert({'name': "Gmail"}) # id 2
-    db.add_foreign_keys((('players', 'auth_method_id', 'auth_methods', 'id'),))
-
 trivias = db.t.trivias
-if trivias not in db.t:
-    #bulk import from HF dataset
-    dataset = load_dataset('Mihaiii/trivia_single_choice-4-options', split='train')
-    conn = sqlite3.connect('uplayers.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-    CREATE TABLE trivias (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        topic TEXT NOT NULL,
-        question TEXT NOT NULL,
-        option_A TEXT NOT NULL,
-        option_B TEXT NOT NULL,
-        option_C TEXT NOT NULL,
-        option_D TEXT NOT NULL,
-        correct_option TEXT NOT NULL
-    );
-    ''')
-    conn.commit()
-    insert_query = "INSERT INTO trivias (topic, question, option_A, option_B, option_C, option_D, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    conn.execute('BEGIN TRANSACTION')
-    for record in dataset:
-        cursor.execute(insert_query, (record['topic'], record['question'], record['option_A'], record['option_B'], record['option_C'], record['option_D'], record['correct_option']))
-    conn.commit()
-    conn.close()
-
+    
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
@@ -409,8 +374,44 @@ class TaskManager:
         countdown_div = Div(f"{countdown_format}", cls="countdown", style="text-align: center; font-size: 40px;" + style, id="countdown")
         await self.send_to_clients(countdown_div, client)
 
+def ensure_db_tables():
+    if players not in db.t:
+        players.create(id=int, name=str, points=int, auth_method_id=int, pk='id')
+    
+    if auth_methods not in db.t:
+        auth_methods.create(id=int, name=str, pk='id')
+        auth_methods.insert({'name': "Unknown"}) # id 0
+        auth_methods.insert({'name': "Huggingface"}) # id 1
+        auth_methods.insert({'name': "Gmail"}) # id 2
+        db.add_foreign_keys((('players', 'auth_method_id', 'auth_methods', 'id'),))
 
+    if trivias not in db.t:
+        #bulk import from HF dataset
+        dataset = load_dataset('Mihaiii/trivia_single_choice-4-options', split='train')
+        conn = sqlite3.connect('uplayers.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+        CREATE TABLE trivias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            question TEXT NOT NULL,
+            option_A TEXT NOT NULL,
+            option_B TEXT NOT NULL,
+            option_C TEXT NOT NULL,
+            option_D TEXT NOT NULL,
+            correct_option TEXT NOT NULL
+        );
+        ''')
+        conn.commit()
+        insert_query = "INSERT INTO trivias (topic, question, option_A, option_B, option_C, option_D, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        conn.execute('BEGIN TRANSACTION')
+        for record in dataset:
+            cursor.execute(insert_query, (record['topic'], record['question'], record['option_A'], record['option_B'], record['option_C'], record['option_D'], record['correct_option']))
+        conn.commit()
+        conn.close()
+    
 async def app_startup():
+    ensure_db_tables()
     num_executors = 2  # Change this to run more executors
     task_manager = TaskManager(num_executors)
     app.state.task_manager = task_manager
