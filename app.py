@@ -290,8 +290,6 @@ class TaskManager:
         async with self.topics_lock:
             self.topics.append(Topic(points=points, topic=topic, user=user_id))
             self.topics = deque(sorted(self.topics, reverse=True))
-            if len(self.topics) > env_vars.MAX_NR_TOPICS:
-                self.topics = self.topics[::-env_vars.MAX_NR_TOPICS]
             await self.broadcast_next_topics()
             logging.debug(f"User topic: {topic} added")
 
