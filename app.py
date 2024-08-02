@@ -573,9 +573,9 @@ def get(app, session, code: str = None):
         error_message = str(e)
         return f"An error occurred: {error_message}"
     user_id = user_info.get("preferred_username")
-    sub = user_info.get(HuggingFaceClient.id_key) 
+    sub = str(user_info.get(HuggingFaceClient.id_key))
     if 'session_id' not in session:
-        session['session_id'] = user_id + sub[-4:].zfill(4)
+        session['session_id'] = user_id + "#" + sub[-4:].zfill(4)
             
     logging.info(f"Client connected: {user_id}")
     return RedirectResponse(url="/")
@@ -589,9 +589,9 @@ def get(app, session, code: str = None):
     GoogleClient.parse_response(code)
     user_info = GoogleClient.get_info()
     user_id = user_info.get('name')
-    sub = user_info.get(GoogleClient.id_key) 
+    sub = str(user_info.get(GoogleClient.id_key))
     if 'session_id' not in session:
-        session['session_id'] = user_id + sub[-4:].zfill(4)
+        session['session_id'] = user_id + "#" + sub[-4:].zfill(4)
 
 
     logging.info(f"Client connected: {user_id}")
