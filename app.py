@@ -118,7 +118,7 @@ class Topic:
     user: str = field(default="[bot]", compare=False)
     answers: List[Tuple[str, str]] = field(default_factory=list, compare=False)
     winners: List[str] = field(default_factory=list, compare=False)
-    question: Question = field(default=None, compare=False),
+    question: Question = field(default=None, compare=False)
     is_from_db: bool = field(default=False, compare=False)
     def __hash__(self):
         return hash((self.points, self.topic, self.user))
@@ -636,7 +636,7 @@ async def get(session, app, request):
                 online_users_str = ", ".join(task_manager.online_users.keys())
                 logging.error(f"It should never get here. user_id={user_id}, online_users={online_users_str}")
                 task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0, 'auth_method_id': 0 }
-
+        
         auth_method_id = task_manager.online_users[user_id]['auth_method_id']
         db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.all_users[user_id]}' and {players.c.auth_method_id} = {auth_method_id}")
     
