@@ -37,11 +37,23 @@ if auth_methods not in db.t:
 
 trivias = db.t.trivias
 if trivias not in db.t:
-    trivias.create(topic=str, question=str, option_A=str, option_B=str, option_C=str, option_D=str, correct_option=str, pk='id')
     #bulk import from HF dataset
     dataset = load_dataset('Mihaiii/trivia_single_choice-4-options', split='train')
     conn = sqlite3.connect('uplayers.db')
     cursor = conn.cursor()
+    cursor.execute('''
+    CREATE TABLE trivias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        topic TEXT NOT NULL,
+        question TEXT NOT NULL,
+        option_A TEXT NOT NULL,
+        option_B TEXT NOT NULL,
+        option_C TEXT NOT NULL,
+        option_D TEXT NOT NULL,
+        correct_option TEXT NOT NULL
+    );
+    ''')
+    conn.commit()
     insert_query = "INSERT INTO trivias (topic, question, option_A, option_B, option_C, option_D, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)"
     conn.execute('BEGIN TRANSACTION')
     for record in dataset:
