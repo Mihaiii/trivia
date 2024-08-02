@@ -33,6 +33,10 @@ if auth_methods not in db.t:
     auth_methods.insert({'name': "Gmail"}) # id 2
     db.add_foreign_keys((('players', 'auth_method_id', 'auth_methods', 'id'),))
 
+trivias = db.t.trivias
+if trivias not in db.t:
+    #TODO
+    pass
 
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
@@ -91,8 +95,8 @@ class Topic:
     user: str = field(default="[bot]", compare=False)
     answers: List[Tuple[str, str]] = field(default_factory=list, compare=False)
     winners: List[str] = field(default_factory=list, compare=False)
-    question: Question = field(default=None, compare=False)
-
+    question: Question = field(default=None, compare=False),
+    is_from_db: bool = field(default=False, compare=False)
     def __hash__(self):
         return hash((self.points, self.topic, self.user))
 
@@ -142,32 +146,36 @@ class TaskManager:
     async def update_status(self, topic: Topic):
         await asyncio.sleep(1)
         should_consume = False
-        async with self.topics_lock:
-            clone_topic = copy.copy(topic)
-        try:
-            if clone_topic.status == "pending":
-                llm_resp = await llm_req.topic_check(clone_topic.topic)
-                if llm_resp == "Yes":
-                   status = "computing"
-                else:
-                   status = "failed"
-                async with self.topics_lock:
-                    topic.status = status
-            elif clone_topic.status == "computing":
-                content = await llm_req.generate_question(clone_topic.topic)
-                async with self.topics_lock:
-                    topic.question = Question(content["trivia question"],
-                                content["option A"],
-                                content["option B"],
-                                content["option C"],
-                                content["option D"],
-                                content["correct answer"].replace(" ", "_"))
-                    topic.status = "successful"
-        except Exception as e:
-            error_message = str(e)
-            logging.debug("llm error: " + error_message)
+            
+        if topic.is_from_db:
+            status ="successful"
+        else:
             async with self.topics_lock:
-                topic.status = "failed"
+                clone_topic = copy.copy(topic)
+            try:
+                if clone_topic.status == "pending":
+                    llm_resp = await llm_req.topic_check(clone_topic.topic)
+                    if llm_resp == "Yes":
+                        status = "computing"
+                    else:
+                        status = "failed"
+                    async with self.topics_lock:
+                        topic.status = status
+                elif clone_topic.status == "computing":
+                    content = await llm_req.generate_question(clone_topic.topic)
+                    async with self.topics_lock:
+                        topic.question = Question(content["trivia question"],
+                                    content["option A"],
+                                    content["option B"],
+                                    content["option C"],
+                                    content["option D"],
+                                    content["correct answer"].replace(" ", "_"))
+                        topic.status = "successful"
+            except Exception as e:
+                error_message = str(e)
+                logging.debug("llm error: " + error_message)
+                async with self.topics_lock:
+                    topic.status = "failed"
 
         await self.broadcast_next_topics()
         async with self.topics_lock:
@@ -245,16 +253,21 @@ class TaskManager:
                     need_default_topics = True
 
             if need_default_topics:
-                await self.add_default_topics()
+                await self.add_database_topics()
             await asyncio.sleep(1)  # Check periodically
-
-    async def add_default_topics(self):
+    
+    async def add_database_topics(self):
         async with self.topics_lock:
             if len(self.topics) < env_vars.MAX_NR_TOPICS_FOR_ALLOW_MORE:
                 try:
-                    topics = await llm_req.gen_topics()
-                    for t in topics:
-                        self.topics.append(Topic(0, t, user="[bot]"))
+                    trivia_recs = db.q(f"SELECT * FROM trivias ORDER BY RANDOM() LIMIT {env_vars.MAX_NR_TOPICS_FOR_ALLOW_MORE}")                   
+                    for trivia_rec in trivia_recs:
+                        self.topics.append(
+                            Topic(0,
+                                  topic=trivia_rec["topic"],
+                                  user="[bot]", 
+                                  question=Question(trivia_rec["question"], trivia_rec["option_A"],  trivia_rec["option_B"], trivia_rec["option_C"], trivia_rec["option_D"], f"option_{trivia_rec["correct_option"]}"),
+                                  is_from_db=True))
                     self.topics = deque(sorted(self.topics, reverse=True))
                     await self.broadcast_next_topics()
                     logging.debug("Default topics added")
@@ -311,9 +324,9 @@ class TaskManager:
                 self.past_topic.winners = [a[0] for a in self.past_topic.answers if a[1] == self.past_topic.question.correct_answer]
             
             ids = ", ".join([str(self.all_users[w]) for w in self.past_topic.winners])
-            db_player = db.q(f"select * from {players} where {players.c.id} in ({ids})")
+            db_players = db.q(f"select * from {players} where {players.c.id} in ({ids})")
             
-            for db_winner in db_player:
+            for db_winner in db_players:
                 winner_name = db_winner['name']
                 db_winner['points'] += (len(self.past_topic.winners) - self.past_topic.winners.index(winner_name)) * 10
                     
@@ -328,7 +341,7 @@ class TaskManager:
                         await self.send_to_clients(elem, client) 
                         
                 players.update(db_winner)
-                elem = Div(winner_name + ": " + str(db_player[0]['points']) + " pts", cls='login', id='login_points')
+                elem = Div(winner_name + ": " + str(db_winner['points']) + " pts", cls='login', id='login_points')
                 for client in self.online_users[winner_name]['ws_clients']:
                     await self.send_to_clients(elem, client)   
             
