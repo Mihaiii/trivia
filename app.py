@@ -20,8 +20,9 @@ from datasets import load_dataset
 logging.basicConfig(level=logging.DEBUG)
 
 SIGN_IN_TEXT = """Only logged users can play. Press on either "Sign in with HuggingFace" or "Sign in with Google"."""
-  
-db = database(f'{env_vars.DB_DIRECTORY}trivia.db')
+
+db_path = f'{env_vars.DB_DIRECTORY}trivia.db'
+db = database(db_path)
 players = db.t.players
 auth_methods = db.t.auth_methods
 trivias = db.t.trivias
@@ -388,7 +389,7 @@ def ensure_db_tables():
     if trivias not in db.t:
         #bulk import from HF dataset
         dataset = load_dataset('Mihaiii/trivia_single_choice-4-options', split='train')
-        conn = sqlite3.connect('uplayers.db')
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
         CREATE TABLE trivias (
