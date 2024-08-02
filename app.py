@@ -10,8 +10,8 @@ import threading
 from typing import List, Tuple
 from auth import HuggingFaceClient
 from difflib import SequenceMatcher
-from scripts import ThemeSwitch, enterToBid
-import fake_llm_req as llm_req
+from js_scripts import ThemeSwitch, enterToBid
+import llm_req
 import copy
 import env_vars
 
