@@ -625,10 +625,10 @@ async def get(session, app, request):
                 logging.error(f"It should never get here. user_id={user_id}, online_users={online_users_str}")
                 task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0, 'auth_method_id': 0 }
 
-        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.all_users[user_id]}'")
+        auth_method_id = task_manager.online_users[user_id]['auth_method_id']
+        db_player = db.q(f"select * from {players} where {players.c.id} = '{task_manager.all_users[user_id]}' and {players.c.auth_method_id} = {auth_method_id}")
     
         if not db_player:
-            auth_method_id = task_manager.online_users[user_id]['auth_method_id']
             current_points = 20
             players.insert({'name': user_id, 'points': current_points, 'auth_method_id': auth_method_id})
             result = db.q(f"SELECT {players.c.id} FROM {players} WHERE {players.c.name} = {user_id} and {players.c.auth_method_id} = {auth_method_id}")
