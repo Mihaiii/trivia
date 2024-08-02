@@ -618,11 +618,6 @@ async def get(session, app, request):
     
     if 'session_id' in session:
         user_id = session['session_id']
-        with task_manager.online_users_lock:
-            if user_id not in task_manager.online_users:
-                online_users_str = ", ".join(task_manager.online_users.keys())
-                logging.error(f"It should never get here. user_id={user_id}, online_users={online_users_str}")
-                task_manager.online_users[user_id] = { 'ws_clients': set(), 'combo_count': 0 }
         
         if user_id not in task_manager.all_users:
             task_manager.all_users[user_id] = None
