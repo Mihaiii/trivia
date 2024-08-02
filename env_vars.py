@@ -21,7 +21,7 @@ BID_MIN_POINTS = int(os.environ.get("BID_MIN_POINTS", 3))
 # MAX LENGTH OF THE USER PROVIDED TOPIC (WE REDUCE MALICIOUS INPUT)
 TOPIC_MAX_LENGTH = int(os.environ.get("TOPIC_MAX_LENGTH", 25))
     
-DUPLICATE_TOPIC_THRESHOLD = int(os.environ.get("DUPLICATE_TOPIC_THRESHOLD", 0.9))
+DUPLICATE_TOPIC_THRESHOLD = float(os.environ.get("DUPLICATE_TOPIC_THRESHOLD", 0.9))
 
 #How many consecutive question does a user have to answer in order to win combo points?
 COMBO_CONSECUTIVE_NR_FOR_WIN = int(os.environ.get("COMBO_CONSECUTIVE_NR_FOR_WIN", 3))
