@@ -78,10 +78,6 @@ To run this application, ensure you have the following configurations set:
 - **`compute_winners`**: Determines the winners based on correct answers and updates their scores.
 - **`send_to_clients`**: Utility function for sending data to specific clients or broadcasting to all.
 
-### Security Considerations
-- The application ensures that only authenticated and authorized users can propose topics or answer questions, preventing abuse.
-- Input validation and length restrictions are implemented to protect against malicious inputs.
-
 ### The meaning of the card statuses
 
 In the source code, there is a `Topic` class, referred to in this documentation as a "topic card." This is what is displayed in the UI (user interface) on the left panel. A topic card can have one of the following statuses, depending on its current state:
