@@ -5,8 +5,7 @@ def ThemeSwitch(sel='#theme-toggle', buttonClass = 'secondary'):
     src = """
 import { proc_htmx} from "https://cdn.jsdelivr.net/gh/answerdotai/fasthtml-js@1.0.5/fasthtml.js";
 document.addEventListener("DOMContentLoaded", () => {
-  proc_htmx();
-});
+
 const button = document.createElement('button');
 button.id = 'theme-switch';
 
@@ -97,7 +96,7 @@ me(selector).on("click", _ =>
     localStorage.setItem("triviaTheme", newTheme)
     setIconToShow()
 })
-
+});
 """ % (buttonClass, sel)
     return Script(src, type='module')
 
