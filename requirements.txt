@@ -1,4 +1,3 @@
 python-fasthtml==0.4.0
 httpx==0.27.0
 datasets==2.20.0
-sqlite-minutils==4.0.3
