@@ -3,7 +3,7 @@ from fasthtml.xtend import Script
 
 def ThemeSwitch(sel='#theme-toggle', buttonClass = 'secondary'):
     src = """
-import { proc_htmx} from "https://cdn.jsdelivr.net/gh/answerdotai/fasthtml-js@1.0.5/fasthtml.js";
+import { proc_htmx} from "https://cdn.jsdelivr.net/gh/answerdotai/fasthtml-js@1.0.3/fasthtml.js";
 document.addEventListener("DOMContentLoaded", () => {
 
 const button = document.createElement('button');
