@@ -29,6 +29,11 @@ trivias = db.t.trivias
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
+# Override htmx scripts with pinned versions compatible with FastHTML 0.4.0
+# htmx 1.9.x is compatible with the older ws extension API
+htmx_script = Script(src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js")
+# ws extension 1.x is compatible with htmx 1.x
+htmx_ws_script = Script(src="https://unpkg.com/htmx-ext-ws@1.0.0/ws.js")
 
 css = [
     picolink,
@@ -416,7 +421,7 @@ async def app_startup():
         asyncio.create_task(task_manager.run_executor(i))
 
 
-app = FastHTML(hdrs=(css, ThemeSwitch()), ws_hdr=True, on_startup=[app_startup])
+app = FastHTML(hdrs=(htmx_script, htmx_ws_script, css, ThemeSwitch()), ws_hdr=False, htmx=False, on_startup=[app_startup])
 rt = app.route
 setup_toasts(app)
 
@@ -861,3 +866,4 @@ async def on_disconnect(send, session):
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
 async def ws(send):
     pass
+
