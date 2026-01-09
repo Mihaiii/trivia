@@ -33,7 +33,7 @@ def similar(a, b):
 # htmx 1.9.x is compatible with the older ws extension API
 htmx_script = Script(src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js")
 # ws extension 1.x is compatible with htmx 1.x
-htmx_ws_script = Script(src="https://unpkg.com/htmx-ext-ws@1.0.0/ws.js")
+htmx_ws_script = Script(src="https://unpkg.com/htmx-ext-ws@2.0.3/ws.js")
 
 css = [
     picolink,
@@ -866,4 +866,5 @@ async def on_disconnect(send, session):
 @app.ws('/ws', conn=on_connect, disconn=on_disconnect)
 async def ws(send):
     pass
+
 
